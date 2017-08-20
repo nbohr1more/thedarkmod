@@ -252,7 +252,7 @@ void RB_T_FillDepthBuffer( const drawSurf_t *surf ) {
 		color[3] = 1;
 	}
 
-	idDrawVert *ac = (idDrawVert *)vertexCache.Position( tri->ambientCache );
+	idDrawVert *ac = (idDrawVert *)vertexCache.VertexPosition( tri->ambientCache );
 	//qglVertexPointer( 3, GL_FLOAT, sizeof( idDrawVert ), ac->xyz.ToFloatPtr() );
 	qglVertexAttribPointer( 0, 3, GL_FLOAT, false, sizeof( idDrawVert ), &ac->xyz );
 
@@ -549,7 +549,7 @@ void RB_STD_T_RenderShaderPasses_OldStage( idDrawVert *ac, const shaderStage_t *
 	switch (pStage->texture.texgen) {
 	case TG_SKYBOX_CUBE: case TG_WOBBLESKY_CUBE: 
 		qglEnableVertexAttribArray(8);
-		qglVertexAttribPointer(8, 3, GL_FLOAT, false, 0, vertexCache.Position(surf->dynamicTexCoords));
+		qglVertexAttribPointer(8, 3, GL_FLOAT, false, 0, vertexCache.VertexPosition(surf->dynamicTexCoords));
 		cubeMapShader.Use();
 		break;
 	case TG_REFLECT_CUBE:
@@ -883,7 +883,7 @@ void RB_STD_T_RenderShaderPasses( const drawSurf_t *surf ) {
 		RB_EnterModelDepthHack( surf->space->modelDepthHack );
 	}
 
-	idDrawVert *ac = (idDrawVert *)vertexCache.Position( tri->ambientCache );
+	idDrawVert *ac = (idDrawVert *)vertexCache.VertexPosition( tri->ambientCache );
 	//qglVertexPointer( 3, GL_FLOAT, sizeof( idDrawVert ), ac->xyz.ToFloatPtr() );
 	qglVertexAttribPointer( 0, 3, GL_FLOAT, false, sizeof( idDrawVert ), &ac->xyz );
 
@@ -1043,7 +1043,7 @@ static void RB_T_Shadow( const drawSurf_t *surf ) {
 		return;
 	}
 
-	qglVertexAttribPointer( 0, 4, GL_FLOAT, false, sizeof( shadowCache_t ), vertexCache.Position( tri->shadowCache ) );
+	qglVertexAttribPointer( 0, 4, GL_FLOAT, false, sizeof( shadowCache_t ), vertexCache.VertexPosition( tri->shadowCache ) );
 
 	// we always draw the sil planes, but we may not need to draw the front or rear caps
 	int	numIndexes;
@@ -1253,11 +1253,11 @@ static void RB_T_BlendLight( const drawSurf_t *surf ) {
 
 	// this gets used for both blend lights and shadow draws
 	if ( tri->ambientCache ) {
-		idDrawVert	*ac = (idDrawVert *)vertexCache.Position( tri->ambientCache );
+		idDrawVert	*ac = (idDrawVert *)vertexCache.VertexPosition( tri->ambientCache );
 		//qglVertexPointer( 3, GL_FLOAT, sizeof( idDrawVert ), ac->xyz.ToFloatPtr() );
 		qglVertexAttribPointer( 0, 3, GL_FLOAT, false, sizeof( idDrawVert ), ac->xyz.ToFloatPtr() );
 	} else if (tri->shadowCache) {
-		shadowCache_t	*sc = (shadowCache_t *)vertexCache.Position( tri->shadowCache );
+		shadowCache_t	*sc = (shadowCache_t *)vertexCache.VertexPosition( tri->shadowCache );
 		//qglVertexPointer( 3, GL_FLOAT, sizeof( shadowCache_t ), sc->xyz.ToFloatPtr() );
 		qglVertexAttribPointer( 0, 3, GL_FLOAT, false, sizeof( shadowCache_t ), sc->xyz.ToFloatPtr() );
 	}

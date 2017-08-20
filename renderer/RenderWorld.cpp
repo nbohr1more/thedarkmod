@@ -154,12 +154,26 @@ ResizeInteractionTable
 ===================
 */
 void idRenderWorldLocal::ResizeInteractionTable() {
-	// we overflowed the interaction table, so dump it
-	// we may want to resize this in the future if it turns out to be common
-	common->Warning( "Overflowed interactionTableWidth - table removed and disabled" );
-	R_StaticFree( interactionTable );
-	interactionTable = NULL;
-	r_useInteractionTable.SetBool( 0 );
+	// we overflowed the interaction table, so make it larger
+	common->Printf( "idRenderWorldLocal::ResizeInteractionTable: overflowed interactionTable, resizing\n" );
+
+	const int oldInteractionTableWidth = interactionTableWidth;
+	const int oldIinteractionTableHeight = interactionTableHeight;
+	idInteraction ** oldInteractionTable = interactionTable;
+
+	// build the interaction table
+	// this will be dynamically resized if the entity / light counts grow too much
+	interactionTableWidth = entityDefs.Num() + 100;
+	interactionTableHeight = lightDefs.Num() + 100;
+	const int	size = interactionTableWidth * interactionTableHeight * sizeof( *interactionTable );
+	interactionTable = ( idInteraction ** )R_ClearedStaticAlloc( size );
+	for( int l = 0; l < oldIinteractionTableHeight; l++ ) {
+		for( int e = 0; e < oldInteractionTableWidth; e++ ) {
+			interactionTable[l * interactionTableWidth + e] = oldInteractionTable[l * oldInteractionTableWidth + e];
+		}
+	}
+
+	R_StaticFree( oldInteractionTable );
 }
 
 /*
@@ -1475,60 +1489,65 @@ void idRenderWorldLocal::GenerateAllInteractions() {
 	// try and do any view specific optimizations
 	tr.viewDef = NULL;
 
-	for ( int i = 0 ; i < this->lightDefs.Num() ; i++ ) {
+	// build the interaction table
+	// this will be dynamically resized if the entity / light counts grow too much
+	interactionTableWidth = entityDefs.Num() + 100;
+	interactionTableHeight = lightDefs.Num() + 100;
+	const int size = interactionTableWidth * interactionTableHeight * sizeof( interactionTable );
+	interactionTable = ( idInteraction ** )R_ClearedStaticAlloc( size );
+		
+	int	count = 0;
+	for( int i = 0; i < this->lightDefs.Num(); i++ ) {
 		idRenderLightLocal	*ldef = this->lightDefs[i];
-		if ( !ldef ) {
+		if( !ldef ) {
 			continue;
 		}
-		this->CreateLightDefInteractions( ldef );
+
+		// check all areas the light touches
+		for( areaReference_t *lref = ldef->references; lref; lref = lref->ownerNext ) {
+			portalArea_t *area = lref->area;
+
+			// check all the models in this area
+			for( areaReference_t *eref = area->entityRefs.areaNext; eref != &area->entityRefs; eref = eref->areaNext ) {
+				idRenderEntityLocal	 *edef = eref->entity;
+
+				// scan the doubly linked lists, which may have several dozen entries
+				idInteraction	*inter;
+
+				// we could check either model refs or light refs for matches, but it is
+				// assumed that there will be less lights in an area than models
+				// so the entity chains should be somewhat shorter (they tend to be fairly close).
+				for( inter = edef->firstInteraction; inter != NULL; inter = inter->entityNext ) {
+					if( inter->lightDef == ldef ) {
+						break;
+					}
+				}
+
+				// if we already have an interaction, we don't need to do anything
+				if( inter != NULL ) {
+					continue;
+				}
+
+				// make an interaction for this light / entity pair
+				// and add a pointer to it in the table
+				inter = idInteraction::AllocAndLink( edef, ldef );
+				count++;
+
+				// the interaction may create geometry
+				inter->CreateStaticInteraction();
+			}
+		}
 	}
+
+	common->Printf( "interactionTable generated of size: %i bytes\n", size );
 
 #ifdef _DEBUG
 	int end = Sys_Milliseconds();
 	int	msec = end - start;
 
+	common->Printf( "%i interactions take %i bytes\n", count, count * sizeof( idInteraction ) );
 	common->Printf( "idRenderWorld::GenerateAllInteractions, msec = %i, staticAllocCount = %i.\n", msec, tr.staticAllocCount );
 #endif
-
-	// build the interaction table
-	if ( r_useInteractionTable.GetBool() ) {
-		// FIXME: Serp
-		// This is temp, and should be changed to better represent the map ent/light count,
-		// Note : Should allocate a nice PoT of 67108864 - try to preserve a PoT in fixed version.
-		const int BUFFER = 4096;
-		interactionTableWidth = 2*BUFFER; // this->entityDefs.Num() + padding // grayman #3192 - double this dimension
-		interactionTableHeight = BUFFER; // this->lightDefs.Num() + padding
-		const int size = (interactionTableWidth * interactionTableHeight) * sizeof( interactionTable ); 
-		interactionTable = (idInteraction **)R_ClearedStaticAlloc( size );
-
-		//common->Printf( "entityDefs.Num(): %i\n", this->entityDefs.Num() );
-		//common->Printf( "lightDefs.Num(): %i\n", this->lightDefs.Num() );
-		//common->Printf( "sizeof( interactionTable ): %i\n", sizeof( interactionTable ) );
-		//common->Printf( "whole size: %i bytes\n", size );
-
-		int index;
-		int	count = 0;
-		idRenderLightLocal *ldef;
-		idRenderEntityLocal	*edef;
-		idInteraction *inter;
-		for ( int i = 0 ; i < this->lightDefs.Num() ; i++ ) {
-			ldef = this->lightDefs[i];
-			if ( !ldef ) {
-				continue;
-			}
-			for ( inter = ldef->firstInteraction; inter != NULL; inter = inter->lightNext ) {
-				edef = inter->entityDef;
-				index = ldef->index * interactionTableWidth + edef->index;
-
-				interactionTable[ index ] = inter;
-				count++;
-			}
-		}
-		common->Printf( "interactionTable generated of size: %i bytes\n", size );
-#ifdef _DEBUG
-		common->Printf( "%i interactions take %i bytes\n", count, count * sizeof( idInteraction ) );
-#endif
-	}
 
 	// entities flagged as noDynamicInteractions will no longer make any
 	generateAllInteractionsCalled = true;

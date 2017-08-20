@@ -46,7 +46,7 @@ Create it if needed
 ==================
 */
 bool R_CreateAmbientCache( srfTriangles_t *tri, bool needsLighting ) {
-	if ( tri->ambientCache ) {
+	if ( vertexCache.CacheIsCurrent( tri->ambientCache ) ) {
 		return true;
 	}
 
@@ -55,7 +55,7 @@ bool R_CreateAmbientCache( srfTriangles_t *tri, bool needsLighting ) {
 		R_DeriveTangents( tri );
 	}
 
-	vertexCache.Alloc( tri->verts, tri->numVerts * sizeof( tri->verts[0] ), &tri->ambientCache );
+	tri->ambientCache = vertexCache.AllocVertex( tri->verts, ALIGN( tri->numVerts * sizeof( tri->verts[0] ), VERTEX_CACHE_ALIGN ) );
 	if ( !tri->ambientCache ) {
 		return false;
 	}
@@ -72,11 +72,11 @@ This is used only for a specific light
 */
 void R_CreatePrivateShadowCache( srfTriangles_t *tri ) {
 
-	if ( !tri->shadowVertexes ) {
+	if ( !vertexCache.CacheIsCurrent( tri->shadowCache ) ) {
 		return;
 	}
 
-	vertexCache.Alloc( tri->shadowVertexes, tri->numVerts * sizeof( *tri->shadowVertexes ), &tri->shadowCache );
+	tri->shadowCache = vertexCache.AllocVertex( tri->shadowVertexes, ALIGN( tri->numVerts * sizeof( *tri->shadowVertexes ), VERTEX_CACHE_ALIGN ) );
 }
 
 /*
@@ -116,7 +116,7 @@ void R_CreateVertexProgramShadowCache( srfTriangles_t *tri ) {
 
 #endif
 
-	vertexCache.Alloc( temp, tri->numVerts * 2 * sizeof( shadowCache_t ), &tri->shadowCache );
+	tri->shadowCache = vertexCache.AllocVertex( temp, ALIGN( tri->numVerts * 2 * sizeof( shadowCache_t ), VERTEX_CACHE_ALIGN ) );
 }
 
 /*
@@ -140,7 +140,7 @@ void R_SkyboxTexGen( drawSurf_t *surf, const idVec3 &viewOrg ) {
 		texCoords[i][2] = verts[i].xyz[2] - localViewOrigin[2];
 	}
 
-	surf->dynamicTexCoords = vertexCache.AllocFrameTemp( texCoords, size );
+	surf->dynamicTexCoords = vertexCache.AllocVertex( texCoords, ALIGN( size, VERTEX_CACHE_ALIGN ) );
 }
 
 /*
@@ -216,7 +216,7 @@ void R_WobbleskyTexGen( drawSurf_t *surf, const idVec3 &viewOrg ) {
 		R_LocalPointToGlobal( transform, v, texCoords[i] );
 	}
 
-	surf->dynamicTexCoords = vertexCache.AllocFrameTemp( texCoords, size );
+	surf->dynamicTexCoords = vertexCache.AllocVertex( texCoords, ALIGN( size, VERTEX_CACHE_ALIGN ) );
 }
 
 //=======================================================================================================
@@ -453,37 +453,14 @@ void idRenderWorldLocal::CreateLightDefInteractions( idRenderLightLocal *ldef ) 
 			
 			// if any of the edef's interaction match this light, we don't
 			// need to consider it. 
-			idInteraction *inter;
-			if ( r_useInteractionTable.GetBool() && this->interactionTable ) {
-				// allocating these tables may take several megs on big maps, but it saves 3% to 5% of
-				// the CPU time.  The table is updated at interaction::AllocAndLink() and interaction::UnlinkAndFree()
-				//int index = ldef->index * this->interactionTableWidth + edef->index;
-				inter = this->interactionTable[ (ldef->index * this->interactionTableWidth + edef->index) ];
-				if ( inter ) {
-					// if this entity wasn't in view already, the scissor rect will be empty,
-					// so it will only be used for shadow casting
-					if ( !inter->IsEmpty() ) {
-						R_SetEntityDefViewEntity( edef );
-					}
-					continue;
+			idInteraction *inter = this->interactionTable[ (ldef->index * this->interactionTableWidth + edef->index) ];
+			if ( inter ) {
+				// if this entity wasn't in view already, the scissor rect will be empty,
+				// so it will only be used for shadow casting
+				if ( !inter->IsEmpty() ) {
+					R_SetEntityDefViewEntity( edef );
 				}
-			} else {
-				// scan the doubly linked lists, which may have several dozen entries
-
-				// we could check either model refs or light refs for matches, but it is
-				// assumed that there will be less lights in an area than models
-				// so the entity chains should be somewhat shorter (they tend to be fairly close).
-				for ( inter = edef->firstInteraction; inter != NULL; inter = inter->entityNext ) {
-					if ( inter->lightDef == ldef ) {
-						if ( !inter->IsEmpty() ) {
-							R_SetEntityDefViewEntity( edef );
-						}
-						break;
-					}
-				}
-				if ( !inter ) {
-					continue; 
-				}
+				continue;
 			}
 
 			// create a new interaction, but don't do any work other than bbox to frustum culling
@@ -851,8 +828,6 @@ void R_AddLightSurfaces( void ) {
 			if ( !light->frustumTris->ambientCache ) {
 				R_CreateAmbientCache( light->frustumTris, false );
 			}
-			// touch the surface so it won't get purged
-			vertexCache.Touch( light->frustumTris->ambientCache );
 		}
 
 		// add the prelight shadows for the static world geometry
@@ -882,14 +857,10 @@ void R_AddLightSurfaces( void ) {
 			}
 #endif
 
-			// touch the shadow surface so it won't get purged
-			vertexCache.Touch( tri->shadowCache );
-
 			if ( r_useIndexBuffers.GetBool() ) {
-				if ( !tri->indexCache ) {
-					vertexCache.Alloc( tri->indexes, tri->numIndexes * sizeof( tri->indexes[0] ), &tri->indexCache, true );
+				if ( !vertexCache.CacheIsCurrent( tri->indexCache ) ) {
+					tri->indexCache = vertexCache.AllocIndex( tri->indexes, ALIGN( tri->numIndexes * sizeof( tri->indexes[0] ), INDEX_CACHE_ALIGN ) );
 				}
-				vertexCache.Touch( tri->indexCache );
 			}
 
 			R_LinkLightSurf( &vLight->globalShadows, tri, NULL, light, NULL, vLight->scissorRect, true /* FIXME ? */ );
@@ -1274,14 +1245,9 @@ static void R_AddAmbientDrawsurfs( viewEntity_t *vEntity ) {
 				// don't add anything if the vertex cache was too full to give us an ambient cache
 				return;
 			}
-			// touch it so it won't get purged
-			vertexCache.Touch( tri->ambientCache );
 
-			if ( r_useIndexBuffers.GetBool() && !tri->indexCache ) {
-				vertexCache.Alloc( tri->indexes, tri->numIndexes * sizeof( tri->indexes[0] ), &tri->indexCache, true );
-			}
-			if ( tri->indexCache ) {
-				vertexCache.Touch( tri->indexCache );
+			if ( r_useIndexBuffers.GetBool() && !vertexCache.CacheIsCurrent( tri->indexCache ) ) {
+				tri->indexCache = vertexCache.AllocIndex( tri->indexes, ALIGN( tri->numIndexes * sizeof( tri->indexes[0] ), INDEX_CACHE_ALIGN ) );
 			}
 
 			// Soft Particles -- SteveL #3878
