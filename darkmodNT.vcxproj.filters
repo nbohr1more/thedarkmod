@@ -1035,9 +1035,6 @@
     <ClInclude Include="game\Player.h">
       <Filter>Game</Filter>
     </ClInclude>
-    <ClInclude Include="game\PlayerIcon.h">
-      <Filter>Game</Filter>
-    </ClInclude>
     <ClInclude Include="game\PlayerView.h">
       <Filter>Game</Filter>
     </ClInclude>
@@ -1385,6 +1382,9 @@
       <Filter>Game\AI\Tasks</Filter>
     </ClInclude>
     <ClInclude Include="renderer\glsl.h">
+      <Filter>Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="renderer\FrameBuffer.h">
       <Filter>Renderer</Filter>
     </ClInclude>
   </ItemGroup>
@@ -2391,9 +2391,6 @@
     <ClCompile Include="game\Player.cpp">
       <Filter>Game</Filter>
     </ClCompile>
-    <ClCompile Include="game\PlayerIcon.cpp">
-      <Filter>Game</Filter>
-    </ClCompile>
     <ClCompile Include="game\PlayerView.cpp">
       <Filter>Game</Filter>
     </ClCompile>
@@ -2740,7 +2737,7 @@
     <ClCompile Include="renderer\draw_glsl.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
-    <ClCompile Include="renderer\framebufer.cpp">
+    <ClCompile Include="renderer\FrameBufer.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
   </ItemGroup>

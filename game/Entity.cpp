@@ -44,7 +44,7 @@
 // TDM uses entity shaderparm 11 to control frob highlight state
 #define FROB_SHADERPARM 11
 
-#define FIRST_FRAME_SOUND_PROP_ALLOWED 120 // grayman #3768 - no sound propagation before this frame, change from 60 to 120 for 2.06
+#define FIRST_TIME_SOUND_PROP_ALLOWED 2000 // grayman #3768 - no sound propagation before this time
 
 // overridable events
 const idEventDef EV_PostSpawn( "<postspawn>", EventArgs(), EV_RETURNS_VOID, "internal" );
@@ -913,7 +913,7 @@ void idEntity::UpdateChangeableSpawnArgs( const idDict *source ) {
 	cameraTarget = NULL;
 	target = source->GetString( "cameraTarget" );
 	if ( target && target[0] ) {
-		// update the camera taget
+		// update the camera target
 		PostEventMS( &EV_UpdateCameraTarget, 0 );
 	}
 
@@ -1456,7 +1456,7 @@ void idEntity::Spawn( void )
 	renderEntity.entityNum = entityNumber;
 	
 	// go dormant within 5 frames so that when the map starts most monsters are dormant
-	dormantStart = gameLocal.time - DELAY_DORMANT_TIME + gameLocal.msec * 5;
+	dormantStart = gameLocal.time - DELAY_DORMANT_TIME + USERCMD_MSEC * 5;
 
 	origin = renderEntity.origin;
 	axis = renderEntity.axis;
@@ -1471,7 +1471,7 @@ void idEntity::Spawn( void )
 	cameraTarget = NULL;
 	temp = spawnArgs.GetString( "cameraTarget" );
 	if ( temp && temp[0] ) {
-		// update the camera taget
+		// update the camera target
 		PostEventMS( &EV_UpdateCameraTarget, 0 );
 	}
 
@@ -2271,7 +2271,10 @@ void idEntity::Restore( idRestoreGame *savefile )
 	savefile->ReadInt( dormantStart );
 	savefile->ReadBool( cinematic );
 
-	savefile->ReadObject( reinterpret_cast<idClass *&>( cameraTarget ) );
+	savefile->ReadObject( reinterpret_cast<idClass *&>( cameraTarget ) ); 
+
+	// // grayman #4615 - update the camera target (will handle a NULL "cameraTarget")
+	PostEventMS( &EV_UpdateCameraTarget, 0 );
 
 	savefile->ReadInt( health );
 	savefile->ReadInt( maxHealth );
@@ -4676,7 +4679,7 @@ void idEntity::PropSoundS( const char *localName, const char *globalName, float 
 
 	// grayman #3393 - don't propagate sounds in early frames,
 	// because some AI might not yet be set up to hear them
-	if ( gameLocal.framenum < FIRST_FRAME_SOUND_PROP_ALLOWED )
+	if ( gameLocal.time < FIRST_TIME_SOUND_PROP_ALLOWED )
 	{
 		return;
 	}
@@ -4843,7 +4846,7 @@ idEntity::PropSoundDirect
 void idEntity::PropSoundDirect( const char *sndName, bool bForceLocal, bool bAssumeEnv, float VolModIn, int msgTag ) // grayman #3355
 {
 	// grayman #3768 - don't propagate sounds in the early frames
-	if (gameLocal.framenum < FIRST_FRAME_SOUND_PROP_ALLOWED)
+	if (gameLocal.time < FIRST_TIME_SOUND_PROP_ALLOWED)
 	{
 		return;
 	}
@@ -6436,8 +6439,11 @@ idEntity::ActivateContacts
 */
 void idEntity::ActivateContacts()
 {
+
+// nbohr1more: #3871 - increase contact limit to 128 watch for future issues with this limit
+
 	idList<contactInfo_t> contacts;
-	contacts.SetNum( 10, false );
+	contacts.SetNum( 128, false );
 
 	idVec6 dir;
 	int num;
@@ -6448,7 +6454,7 @@ void idEntity::ActivateContacts()
 
 	if ( clipModel->IsTraceModel() )
 	{
-		num = gameLocal.clip.Contacts( &contacts[0], 10, GetPhysics()->GetOrigin(),dir, CONTACT_EPSILON, clipModel, mat3_identity, CONTENTS_SOLID, this );
+		num = gameLocal.clip.Contacts( &contacts[0], 128, GetPhysics()->GetOrigin(),dir, CONTACT_EPSILON, clipModel, mat3_identity, CONTENTS_SOLID, this );
 	}
 	else
 	{
@@ -6457,7 +6463,7 @@ void idEntity::ActivateContacts()
 	
 		idTraceModel trm(GetPhysics()->GetBounds());
 		idClipModel clip(trm);
-		num = gameLocal.clip.Contacts( &contacts[0], 10, GetPhysics()->GetOrigin(),dir, CONTACT_EPSILON, &clip, mat3_identity, CONTENTS_SOLID, this );
+		num = gameLocal.clip.Contacts( &contacts[0], 128, GetPhysics()->GetOrigin(),dir, CONTACT_EPSILON, &clip, mat3_identity, CONTENTS_SOLID, this );
 	}
 	
 	contacts.SetNum( num, false );

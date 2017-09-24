@@ -105,6 +105,16 @@ typedef struct
 	unsigned int dwReserved2[3];
 } ddsFileHeader_t;
 
+struct MakeAmbientMapParam {
+	byte **buffers;
+	byte *outBuffer;
+	int outSize;
+	int samples;
+	int size;
+	int crutchUp;
+	bool specular;
+	int side;
+};
 
 // increasing numeric values imply more information is stored
 typedef enum {
@@ -168,7 +178,6 @@ public:
 	void		CopyFramebuffer( int x, int y, int width, int height, bool useOversizedBuffer );
 
 	void		CopyDepthBuffer( int x, int y, int width, int height, bool useOversizedBuffer );
-	void		CopyStencilBuffer( int x, int y, int width, int height );
 
 	void		UploadScratch( const byte *pic, int width, int height );
 
@@ -412,7 +421,7 @@ public:
 	idImage *			currentDepthImage;			// #3877. Allow shaders to access scene depth
 	idImage *			currentDepthFbo;
 	idImage *			currentStencilFbo;
-	idImage *			stencilCopy;
+	//idImage *			stencilCopy;
 	idImage *			bloomCookedMath;
 	idImage *			bloomImage;
 
@@ -448,8 +457,6 @@ public:
 };
 
 extern idImageManager	*globalImages;		// pointer to global list for the rest of the system
-
-int MakePowerOfTwo( int num );
 
 /*
 ====================================================================

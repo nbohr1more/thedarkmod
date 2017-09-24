@@ -452,7 +452,6 @@ bool idPhysics_Player::SlideMove( bool gravity, bool stepUp, bool stepDown, bool
 					}
 				}
 
-
 				DM_LOG(LC_MOVEMENT, LT_DEBUG)LOGSTRING ("performing step up, velocity now %.4f %.4f %.4f\r",  current.velocity.x, current.velocity.y, current.velocity.z);
 			}
 		}
@@ -902,7 +901,15 @@ idPhysics_Player::WalkMove
 */
 void idPhysics_Player::WalkMove( void ) 
 {
-	if ( waterLevel > WATERLEVEL_WAIST && ( viewForward * groundTrace.c.normal ) > 0.0f )
+	static float moveTimeAccum = 0;
+	moveTimeAccum += frametime;
+	while ( moveTimeAccum < MS2SEC( USERCMD_MSEC ) ) {
+		return;
+	}
+	frametime = moveTimeAccum;
+	moveTimeAccum = 0;
+
+	if ( waterLevel > WATERLEVEL_WAIST && (viewForward * groundTrace.c.normal) > 0.0f )
 	{
 		// begin swimming
 		WaterMove();
@@ -968,7 +975,6 @@ void idPhysics_Player::WalkMove( void )
 			accelerate *= 3.0f;
 		}
 	}
-
 
 	Accelerate( wishdir, wishspeed, accelerate );
 
@@ -2559,6 +2565,9 @@ idPhysics_Player::MovePlayer
 ================
 */
 void idPhysics_Player::MovePlayer( int msec ) {
+	// determine the time
+	framemsec = msec;
+	frametime = framemsec * 0.001f;
 
 	// this counter lets us debug movement problems with a journal
 	// by setting a conditional breakpoint for the previous frame
@@ -2570,10 +2579,6 @@ void idPhysics_Player::MovePlayer( int msec ) {
 	m_bRopeContact = false;
 	m_bClimbableAhead = false;
 	m_bClimbDetachThisFrame = false;
-
-	// determine the time
-	framemsec = msec;
-	frametime = framemsec * 0.001f;
 
 	// default speed
 	playerSpeed = walkSpeed;

@@ -17,6 +17,7 @@
 
 #include "tr_local.h"
 #include "glsl.h"
+#include "FrameBuffer.h"
 
 /*
 ================
@@ -352,6 +353,7 @@ void RB_STD_FillDepthBuffer( drawSurf_t **drawSurfs, int numDrawSurfs ) {
 		return;
 	}
 
+	GL_CheckErrors();
 	RB_LogComment( "---------- RB_STD_FillDepthBuffer ----------\n" );
 
 	depthShader.Use();
@@ -392,6 +394,7 @@ void RB_STD_FillDepthBuffer( drawSurf_t **drawSurfs, int numDrawSurfs ) {
 	}
 
 	qglUseProgram( 0 );
+	GL_CheckErrors();
 }
 
 /*
@@ -954,16 +957,13 @@ int RB_STD_DrawShaderPasses( drawSurf_t **drawSurfs, int numDrawSurfs ) {
 		}
 
 		// only dump if in a 3d view
-		if ( backEnd.viewDef->viewEntitys 
-			//&& tr.backEndRenderer == BE_ARB2 
-			&& !r_useFbo.GetBool() ) {
-			globalImages->currentRenderImage->CopyFramebuffer( backEnd.viewDef->viewport.x1,
-				backEnd.viewDef->viewport.y1, backEnd.viewDef->viewport.x2 - backEnd.viewDef->viewport.x1 + 1,
-				backEnd.viewDef->viewport.y2 - backEnd.viewDef->viewport.y1 + 1, true );
-		}
-		extern void RB_FboAccessColorDepth(bool DepthToo); // duzenko #4425 FIXME ugly magic extern
-		if (r_useFbo.GetBool())
-			RB_FboAccessColorDepth(false);
+		if ( backEnd.viewDef->viewEntitys )
+			if ( r_useFbo.GetBool() )
+				FB_CopyColorBuffer();
+			else
+				globalImages->currentRenderImage->CopyFramebuffer( backEnd.viewDef->viewport.x1,
+					backEnd.viewDef->viewport.y1, backEnd.viewDef->viewport.x2 - backEnd.viewDef->viewport.x1 + 1,
+					backEnd.viewDef->viewport.y2 - backEnd.viewDef->viewport.y1 + 1, true );
 		backEnd.currentRenderCopied = true;
 	}
 
@@ -1023,6 +1023,7 @@ the shadow volumes face INSIDE
 =====================
 */
 static void RB_T_Shadow( const drawSurf_t *surf ) {
+	GL_CheckErrors();
 	const srfTriangles_t	*tri;
 
 	// set the light position if we are using a vertex program to project the rear surfaces
@@ -1153,6 +1154,7 @@ static void RB_T_Shadow( const drawSurf_t *surf ) {
 			RB_DrawShadowElementsWithCounters( tri, numIndexes );
 		}
 	}
+	GL_CheckErrors();
 }
 
 /*
@@ -1177,18 +1179,26 @@ void RB_StencilShadowPass( const drawSurf_t *drawSurfs ) {
 	globalImages->BindNull();
 
 	// for visualizing the shadows
-	if ( r_showShadows.GetInteger() ) {
-		if ( r_showShadows.GetInteger() == 2 ) {
-			// draw filled in
-			GL_State( GLS_DEPTHMASK | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_LESS  );
-		} else {
-			// draw as lines, filling the depth buffer
-			GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO | GLS_POLYMODE_LINE | GLS_DEPTHFUNC_ALWAYS  );
-		}
-	} else {
+	switch ( r_showShadows.GetInteger() )
+	{
+	case -1:
+		GL_State( /*GLS_DEPTHMASK |/**/ GLS_COLORMASK | GLS_ALPHAMASK | GLS_DEPTHFUNC_LESS );
+		break;
+	case 1:
+		// draw filled in
+		GL_State( GLS_DEPTHMASK | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_LESS );
+		break;
+	case 2:
+		GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO | GLS_POLYMODE_LINE | GLS_DEPTHFUNC_ALWAYS );
+		break;
+	case 3:
+		GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO | GLS_POLYMODE_LINE | GLS_DEPTHFUNC_LESS );
+		break;
+	default:
 		// don't write to the color buffer, just the stencil buffer
 		GL_State( GLS_DEPTHMASK | GLS_COLORMASK | GLS_ALPHAMASK | GLS_DEPTHFUNC_LESS );
-	}
+		break;
+	} 
 
 	if ( r_shadowPolygonFactor.GetFloat() || r_shadowPolygonOffset.GetFloat() ) {
 		qglPolygonOffset( r_shadowPolygonFactor.GetFloat(), -r_shadowPolygonOffset.GetFloat() );
@@ -1213,8 +1223,11 @@ void RB_StencilShadowPass( const drawSurf_t *drawSurfs ) {
 		qglDisable( GL_DEPTH_BOUNDS_TEST_EXT );
 	}
 
-	qglStencilFunc( GL_GEQUAL, 128, 255 );
 	qglStencilOp( GL_KEEP, GL_KEEP, GL_KEEP );
+	if ( r_softShadows.GetBool() && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID )
+		qglStencilFunc( GL_ALWAYS, 128, 255 );
+	else
+		qglStencilFunc( GL_GEQUAL, 128, 255 );
 }
 
 /*
@@ -1622,8 +1635,7 @@ void RB_Bloom() {
 	int w = globalImages->currentRenderImage->uploadWidth, h = globalImages->currentRenderImage->uploadHeight;
 	if ( !w || !h ) // this has actually happened
 		return;
-	extern void RB_FboAccessColorDepth( bool DepthToo = false );
-	RB_FboAccessColorDepth();
+	FB_CopyColorBuffer();
 
 	// full screen blends
 	qglLoadIdentity();

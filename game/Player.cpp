@@ -1447,7 +1447,7 @@ bool idPlayer::WaitUntilReady()
 	gui->Redraw(m_WaitUntilReadyGuiTime);
 
 	// Increase the "private" GUI time 
-	m_WaitUntilReadyGuiTime += gameLocal.msec;
+	m_WaitUntilReadyGuiTime += USERCMD_MSEC;
 	
 	return ready;
 }
@@ -5565,7 +5565,7 @@ idPlayer::UpdateAir
 ===================
 */
 void idPlayer::UpdateAir( void )
-{	
+{
 	if ( health <= 0 )
 	{
 		return;
@@ -5587,8 +5587,7 @@ void idPlayer::UpdateAir( void )
 			{
 				const int	*pvsAreas = GetPVSAreas();
 				areaNum = pvsAreas[0];
-			}
-			else
+			} else
 			{
 				areaNum = gameRenderWorld->PointInArea( this->GetPhysics()->GetOrigin() );
 			}
@@ -5599,8 +5598,8 @@ void idPlayer::UpdateAir( void )
 #ifdef MOD_WATERPHYSICS // check if the player is in water
 
 	idPhysics* phys = GetPhysics();
-	
-	if (phys != NULL && phys->IsType(idPhysics_Actor::Type) && 
+
+	if ( phys != NULL && phys->IsType( idPhysics_Actor::Type ) &&
 		static_cast<idPhysics_Actor*>(phys)->GetWaterLevel() >= WATERLEVEL_HEAD )
 	{
 		newAirless = true;	// MOD_WATERPHYSICS
@@ -5624,24 +5623,7 @@ void idPlayer::UpdateAir( void )
 				hud->HandleNamedEvent( "noAir" );
 			}
 		}
-
-		airTics--;
-
-		if ( airTics < 0 )
-		{
-			airTics = 0;
-			// check for damage
-			const idDict *damageDef = gameLocal.FindEntityDefDict( "damage_noair", false );
-			int dmgTiming = 1000 * (damageDef ? static_cast<int>(damageDef->GetFloat( "delay", "3.0" )) : 3 );
-			if ( gameLocal.time > lastAirDamage + dmgTiming )
-			{
-				Damage( NULL, NULL, vec3_origin, "damage_noair", 1.0f, 0 );
-				lastAirDamage = gameLocal.time;
-			}
-		}
-		
-	}
-	else
+	} else
 	{
 		if ( airless )
 		{
@@ -5657,19 +5639,32 @@ void idPlayer::UpdateAir( void )
 				hud->HandleNamedEvent( "Air" );
 			}
 		}
-
-		airTics += 2;	// regain twice as fast as lose
-		if ( airTics > pm_airTics.GetInteger() )
-		{
-			airTics = pm_airTics.GetInteger();
-		}
 	}
 
 	airless = newAirless;
 
 	if ( hud )
-	{
 		hud->SetStateInt( "player_air", 100 * airTics / pm_airTics.GetInteger() );
+
+	if ( gameLocal.time >= lastAirCheck ) {
+		if ( airless ) {
+			airTics--;
+			if ( airTics < 0 ) {
+				airTics = 0;
+				// check for damage
+				const idDict *damageDef = gameLocal.FindEntityDefDict( "damage_noair", false );
+				int dmgTiming = 1000 * (damageDef ? static_cast<int>(damageDef->GetFloat( "delay", "3.0" )) : 3);
+				if ( gameLocal.time > lastAirDamage + dmgTiming ) {
+					Damage( NULL, NULL, vec3_origin, "damage_noair", 1.0f, 0 );
+					lastAirDamage = gameLocal.time;
+				}
+			}
+		} else {
+			airTics += 2;	// regain twice as fast as lose
+			if ( airTics > pm_airTics.GetInteger() )
+				airTics = pm_airTics.GetInteger();
+		}
+		lastAirCheck = gameLocal.time + USERCMD_MSEC; // mimic the legacy 60 tics per second
 	}
 }
 
@@ -7057,7 +7052,7 @@ void idPlayer::Move( void )
 
 			// smoothing in a constant duration 
 			// multiply the crouchrate by a frametime factor (frametime 1/30 => 2, 1/60 => 1, 1/120 => 0.5, ...)
-			float crouchrate = (1.0f - pm_crouchrate.GetFloat()) * ((1.0f * gameLocal.getMsec()) / gameLocal.GetMSec());
+			float crouchrate = (1.0f - pm_crouchrate.GetFloat()) * (1.0f * gameLocal.getMsec()) / USERCMD_MSEC;
 			SetEyeHeight(EyeHeight() * (1 - crouchrate) + newEyeOffset * crouchrate);
 		}
 	}
@@ -7507,8 +7502,9 @@ void idPlayer::Think( void )
 {
 	bool allowAttack = false;
 	renderEntity_t *headRenderEnt;
+#ifdef MULTIPLAYER
 	UpdatePlayerIcons();
-
+#endif
 	// latch button actions
 	oldButtons = usercmd.buttons;
 
@@ -7701,18 +7697,6 @@ void idPlayer::Think( void )
 		frobbedEnt->AttackAction(this);
 	}
 
-/*
-	// TODO: remove this because it is just to determine how to fill out the renderstructure.
-	DM_LOG(LC_LIGHT, LT_DEBUG)LOGSTRING("RenderViewId: %u\r", renderView->viewID);
-	DM_LOG(LC_LIGHT, LT_DEBUG)LOGSTRING("x: %u   y: %u   w: %u   h: %u\r", renderView->x, renderView->y, renderView->width, renderView->height);
-	DM_LOG(LC_LIGHT, LT_DEBUG)LOGSTRING("FovX: %f   FovY: %f\r", renderView->fov_x, renderView->fov_y);
-	DM_LOGVECTOR3(LC_LIGHT, LT_DEBUG, "vieworg", renderView->vieworg);
-	DM_LOG(LC_LIGHT, LT_DEBUG)LOGSTRING("cramZNear: %u   forceUpdate: %u\r", renderView->cramZNear, renderView->forceUpdate);
-	DM_LOG(LC_LIGHT, LT_DEBUG)LOGSTRING("time: %u\r", renderView->time);
-	DM_LOG(LC_LIGHT, LT_DEBUG)LOGSTRING("time: %u\r", renderView->globalMaterial);
-	for(i = 0; i < MAX_GLOBAL_SHADER_PARMS; i++)
-		DM_LOG(LC_LIGHT, LT_DEBUG)LOGSTRING("Param[%u]: %f\r", i, renderView->shaderParms[i]);
-*/
 	if ( spectating ) {
 		UpdateSpectating();
 	} else if ( health > 0 && allowAttack) {
@@ -7730,9 +7714,10 @@ void idPlayer::Think( void )
 
 	UpdateDeathSkin( false );
 
-	if ( gameLocal.isMultiplayer ) {
+#ifdef MULTIPLAYER
+	if ( gameLocal.isMultiplayer )
 		DrawPlayerIcons();
-	}
+#endif 
 
 	if ( head.GetEntity() ) {
 		headRenderEnt = head.GetEntity()->GetRenderEntity();
@@ -9397,9 +9382,10 @@ void idPlayer::ClientPredictionThink( void ) {
 		UpdateAnimation();
 	}
 
-	if ( gameLocal.isMultiplayer ) {
+#ifdef MULTIPLAYER
+	if ( gameLocal.isMultiplayer )
 		DrawPlayerIcons();
-	}
+#endif
 
 	Present();
 
@@ -9837,13 +9823,13 @@ void idPlayer::Event_GetIdealWeapon( void ) {
 	}
 }
 
+#ifdef MULTIPLAYER
 /*
 ===============
 idPlayer::UpdatePlayerIcons
 ===============
 */
 void idPlayer::UpdatePlayerIcons( void ) {
-#ifdef MULTIPLAYER
 	int time = networkSystem->ServerGetClientTimeSinceLastPacket( entityNumber );
 	if ( time > cvarSystem->GetCVarInteger( "net_clientMaxPrediction" ) ) {
 		isLagged = true;
@@ -9851,7 +9837,6 @@ void idPlayer::UpdatePlayerIcons( void ) {
 		isLagged = false;
 	}
 	// TODO: chatting, PDA, etc?
-#endif
 }
 
 /*
@@ -9886,6 +9871,7 @@ bool idPlayer::NeedsIcon( void ) {
 
 	return entityNumber != gameLocal.localClientNum && ( isLagged || isChatting );
 }
+#endif
 
 int idPlayer::ProcessLightgem(bool processing)
 {
@@ -11663,7 +11649,7 @@ void idPlayer::PerformFrob(EImpulseState impulseState, idEntity* target)
 		if ( (item != NULL) && item->UseOnFrob() && highlightedEntity->CanBeUsedBy(item, true))
 		{
 			// Try to use the item
-			bool couldBeUsed = UseInventoryItem(impulseState, item, gameLocal.msec, true); // true => is frob action
+			bool couldBeUsed = UseInventoryItem( impulseState, item, USERCMD_MSEC, true ); // true => is frob action
 
 			// Give optional visual feedback on the KeyDown event
 			if ( (impulseState == EPressed) && cv_tdm_inv_use_visual_feedback.GetBool())

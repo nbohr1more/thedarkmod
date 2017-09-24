@@ -31,6 +31,7 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "tr_local.h"
 #include "glsl.h"
+#include "FrameBuffer.h"
 
 struct interactionProgram_t : lightProgram_t {
 	GLint			localViewOrigin;
@@ -43,7 +44,9 @@ struct interactionProgram_t : lightProgram_t {
 	GLint			cubic;
 	GLint			u_lightProjectionCubemap;
 	GLint			u_lightProjectionTexture;
-	
+	GLint			u_lightFalloffCubemap;
+	GLint			u_lightFalloffTexture;
+
 	GLint			colorModulate;
 	GLint			colorAdd;
 
@@ -66,6 +69,7 @@ struct interactionProgram_t : lightProgram_t {
 
 struct pointInteractionProgram_t : interactionProgram_t {
 	GLint			advanced;
+	GLint			softShadows;
 	virtual	void AfterLoad();
 	virtual void UpdateUniforms( const drawInteraction_t *din );
 };
@@ -88,14 +92,6 @@ ambientInteractionProgram_t ambientInteractionShader;
 interactionProgram_t* currrentInteractionShader;
 
 /*
-=========================================================================================
-
-GENERAL INTERACTION RENDERING
-
-=========================================================================================
-*/
-
-/*
 ==================
 RB_GLSL_DrawInteraction
 ==================
@@ -105,7 +101,6 @@ void RB_GLSL_DrawInteraction( const drawInteraction_t *din ) {
 	currrentInteractionShader->UpdateUniforms( din );
 
 	// set the textures
-
 	// texture 0 will be the per-surface bump map
 	GL_SelectTexture( 0 );
 	din->bumpImage->Bind();
@@ -122,19 +117,15 @@ void RB_GLSL_DrawInteraction( const drawInteraction_t *din ) {
 	GL_SelectTexture( 3 );
 	din->diffuseImage->Bind();
 
-	if ( !din->ambientLight ) {
+	//if ( !din->ambientLight || din->ambientCubicLight ) { duzenko: IMHO specular needs to be included in ambient by simple add
 		// texture 4 is the per-surface specular map
 		GL_SelectTexture( 4 );
 		din->specularImage->Bind();
-	}
+	//}
 
-	if ( r_softShadows.GetBool() ) {
-		GL_SelectTexture( 6 );
-		idImage* depth = globalImages->currentDepthImage;
-		//idImage* depth = r_fboSharedDepth.GetBool() ? globalImages->currentDepthImage : globalImages->currentDepthFbo;
-		depth->Bind();
-		const GLenum GL_DEPTH_STENCIL_TEXTURE_MODE = 0x90EA;
-		glTexParameteri( GL_TEXTURE_2D, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_STENCIL_INDEX );
+	if ( r_softShadows.GetBool() && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID ) {
+		GL_SelectTexture( 7 );
+		FB_BindStencilTexture();
 	}
 
 	// draw it
@@ -188,8 +179,8 @@ static void RB_GLSL_CreateDrawInteractions( const drawSurf_t *surf ) {
 	qglDisableVertexAttribArray(3);
 
 	// disable features
-	if ( r_softShadows.GetBool() ) {
-		GL_SelectTexture( 6 );
+	if ( r_softShadows.GetBool() && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID ) {
+		GL_SelectTexture( 7 );
 		globalImages->BindNull();
 	}
 
@@ -209,6 +200,7 @@ static void RB_GLSL_CreateDrawInteractions( const drawSurf_t *surf ) {
 	GL_SelectTexture( 0 );
 
 	qglUseProgram( 0 );
+	GL_CheckErrors();
 }
 
 /*
@@ -225,21 +217,19 @@ void RB_GLSL_DrawInteractions( void ) {
 	// for each light, perform adding and shadowing
 	//
 	for ( vLight = backEnd.viewDef->viewLights ; vLight ; vLight = vLight->next ) {
-		backEnd.vLight = vLight;
-
+		
 		// do fogging later
-		if ( vLight->lightShader->IsFogLight() ) {
+		if ( vLight->lightShader->IsFogLight() ) 
 			continue;
-		}
-		if ( vLight->lightShader->IsBlendLight() ) {
+		if ( vLight->lightShader->IsBlendLight() ) 
 			continue;
-		}
 
 		// if there are no interactions, get out!
 		if ( !vLight->localInteractions && !vLight->globalInteractions && 
-			!vLight->translucentInteractions ) {
+			!vLight->translucentInteractions ) 
 			continue;
-		}
+
+		backEnd.vLight = vLight;
 
 		// clear the stencil buffer if needed
 		if ( vLight->globalShadows || vLight->localShadows ) {
@@ -250,6 +240,8 @@ void RB_GLSL_DrawInteractions( void ) {
 					backEnd.currentScissor.x2 + 1 - backEnd.currentScissor.x1,
 					backEnd.currentScissor.y2 + 1 - backEnd.currentScissor.y1 );
 			}
+			if ( r_softShadows.GetBool() && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID )
+				FB_ToggleShadow( true );
 			qglClear( GL_STENCIL_BUFFER_BIT );
 		} else {
 			// no shadows, so no need to read or write the stencil buffer
@@ -258,21 +250,25 @@ void RB_GLSL_DrawInteractions( void ) {
 			qglStencilFunc( GL_ALWAYS, 128, 255 );
 		}
 
-		stencilShadowShader.Use();
-		RB_StencilShadowPass( vLight->globalShadows );
-		if ( r_softShadows.GetBool() ) 
-			qglStencilFunc( GL_ALWAYS, 128, 255 );
-		;//qglDisable( GL_STENCIL_TEST );
-		RB_GLSL_CreateDrawInteractions( vLight->localInteractions );
-		//qglEnable( GL_STENCIL_TEST );
+		if ( !(r_ignore.GetInteger() & 1) ) {
+			stencilShadowShader.Use();
+			RB_StencilShadowPass( vLight->globalShadows );
+		}
+		if ( (r_ignore.GetInteger() & 4) ) 
+			RB_GLSL_CreateDrawInteractions( vLight->localInteractions );
 
-		stencilShadowShader.Use();
-		RB_StencilShadowPass( vLight->localShadows );
-		if ( r_softShadows.GetBool() )
-			qglStencilFunc( GL_ALWAYS, 128, 255 );
-		;//qglDisable( GL_STENCIL_TEST );
-		RB_GLSL_CreateDrawInteractions( vLight->globalInteractions );
-		//qglEnable( GL_STENCIL_TEST );
+		if ( !(r_ignore.GetInteger() & 2) ) {
+			stencilShadowShader.Use();
+			RB_StencilShadowPass( vLight->localShadows );
+		}
+
+		if ( r_softShadows.GetBool() && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID )
+			FB_ToggleShadow( false );
+
+		if ( !(r_ignore.GetInteger() & 4) )
+			RB_GLSL_CreateDrawInteractions( vLight->localInteractions );
+		if ( !(r_ignore.GetInteger() & 8) )
+			RB_GLSL_CreateDrawInteractions( vLight->globalInteractions );
 
 		qglUseProgram( 0 );	// if there weren't any globalInteractions, it would have stayed on
 
@@ -537,9 +533,10 @@ void interactionProgram_t::AfterLoad() {
 	cubic = qglGetUniformLocation( program, "u_cubic" );
 
 	GLint u_normalTexture = qglGetUniformLocation( program, "u_normalTexture" );
-	GLint u_lightFalloffTexture = qglGetUniformLocation( program, "u_lightFalloffTexture" );
 	u_lightProjectionTexture = qglGetUniformLocation( program, "u_lightProjectionTexture" );
 	u_lightProjectionCubemap = qglGetUniformLocation( program, "u_lightProjectionCubemap" );
+	u_lightFalloffTexture = qglGetUniformLocation( program, "u_lightFalloffTexture" );
+	u_lightFalloffCubemap = qglGetUniformLocation( program, "u_lightFalloffCubemap" );
 	GLint u_diffuseTexture = qglGetUniformLocation( program, "u_diffuseTexture" );
 	GLint u_specularTexture = qglGetUniformLocation( program, "u_specularTexture" );
 	
@@ -551,6 +548,7 @@ void interactionProgram_t::AfterLoad() {
 	qglUniform1i( u_diffuseTexture, 3 );
 	qglUniform1i( u_specularTexture, 4 );
 	qglUniform1i( u_lightProjectionCubemap, 5 ); // else validation fails, 2 at render time
+	qglUniform1i( u_lightFalloffCubemap, 6 ); // else validation fails, 1 at render time
 	qglUseProgram( 0 );
 }
 
@@ -588,10 +586,14 @@ void interactionProgram_t::UpdateUniforms( const drawInteraction_t *din ) {
 		qglUniform1f( cubic, 1.0 );
 		qglUniform1i( u_lightProjectionTexture, 5 );
 		qglUniform1i( u_lightProjectionCubemap, 2 );
+		qglUniform1i( u_lightFalloffTexture, 6 );
+		qglUniform1i( u_lightFalloffCubemap, 1 );
 	} else {
 		qglUniform1f( cubic, 0.0 );
 		qglUniform1i( u_lightProjectionTexture, 2 );
 		qglUniform1i( u_lightProjectionCubemap, 5 );
+		qglUniform1i( u_lightFalloffTexture, 1 );
+		qglUniform1i( u_lightFalloffCubemap, 6 );
 	}
 	qglUniform4fv( localViewOrigin, 1, din->localViewOrigin.ToFloatPtr() );
 	qglUniform4fv( specularMatrixS, 1, din->specularMatrix[0].ToFloatPtr() );
@@ -602,10 +604,11 @@ void interactionProgram_t::UpdateUniforms( const drawInteraction_t *din ) {
 void pointInteractionProgram_t::AfterLoad() {
 	interactionProgram_t::AfterLoad();
 	advanced = qglGetUniformLocation( program, "u_advanced" );
+	softShadows = qglGetUniformLocation( program, "u_softShadows" );
 	GLuint u_stencilTexture = qglGetUniformLocation( program, "u_stencilTexture" );
 	// set texture locations
 	qglUseProgram( program );
-	qglUniform1i( u_stencilTexture, 6 );
+	qglUniform1i( u_stencilTexture, 7 );
 	qglUseProgram( 0 );
 }
 
@@ -613,6 +616,10 @@ void pointInteractionProgram_t::UpdateUniforms( const drawInteraction_t *din ) {
 	interactionProgram_t::UpdateUniforms( din );
 	qglUniform4fv( localLightOrigin, 1, din->localLightOrigin.ToFloatPtr() );
 	qglUniform1f( advanced, r_testARBProgram.GetFloat() );
+	if ( (backEnd.vLight->globalShadows || backEnd.vLight->localShadows) && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID )
+		qglUniform1f( softShadows, r_softShadows.GetFloat() );
+	else
+		qglUniform1f( softShadows, 0 );
 }
 
 void ambientInteractionProgram_t::AfterLoad() {

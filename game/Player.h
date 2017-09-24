@@ -791,10 +791,13 @@ public:
 	// Virtal override of idActor::OnElevator()
 	virtual CMultiStateMover* OnElevator(bool mustBeMoving) const;
 
+#ifdef MULTIPLAYER
+	idPlayerIcon			playerIcon;
 	virtual	void			UpdatePlayerIcons( void );
 	virtual	void			DrawPlayerIcons( void );
 	virtual	void			HidePlayerIcons( void );
 	bool					NeedsIcon( void );
+#endif
 
 	bool					SelfSmooth( void );
 
@@ -1047,8 +1050,8 @@ private:
 	int						numProjectileHits;		// number of hits on mobs
 
 	bool					airless;
-	int						airTics;				// set to pm_airTics at start, drops in vacuum
-	int						lastAirDamage;
+	int						airTics;				// set to pm_airTics at start, drops in water
+	int						lastAirDamage, lastAirCheck;
 	
 	bool					underWaterEffectsActive; // True, if the under water effects are in charge
 	int						underWaterGUIHandle;	 // The handle of the GUI underwater overlay
@@ -1205,8 +1208,6 @@ private:
 	int						MPAimFadeTime;			// for GUI fade
 	bool					MPAimHighlight;
 	bool					isTelefragged;			// proper obituaries
-
-	idPlayerIcon			playerIcon;
 
 	bool					selfSmooth;
 

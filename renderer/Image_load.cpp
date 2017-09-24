@@ -524,7 +524,7 @@ void idImage::GenerateImage( const byte *pic, int width, int height,
 	if (preserveBorder || internalFormat == GL_COLOR_INDEX8_EXT)
 		mipmapMode = 0;
 	else
-		if (mipmapMode == 2 && !glGenerateMipmap)
+		if (mipmapMode == 2 && !qglGenerateMipmap)
 			mipmapMode = 1;
 
 	// copy or resample data as appropriate for first MIP level
@@ -651,7 +651,7 @@ void idImage::GenerateImage( const byte *pic, int width, int height,
 			qglTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
 		qglTexImage2D( GL_TEXTURE_2D, 0, internalFormat, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaledBuffer );
 		if (mipmapMode == 2) // duzenko #4401
-			glGenerateMipmap(GL_TEXTURE_2D);
+			qglGenerateMipmap(GL_TEXTURE_2D);
 		if (mipmapMode == 1) // duzenko #4401
 			if (strcmp(glConfig.vendor_string, "Intel")) // known to have crashed on Intel
 				qglTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_FALSE);
@@ -785,10 +785,6 @@ void idImage::GenerateCubeImage( const byte *pic[6], int size,
 	// an image match from a shader before OpenGL starts would miss
 	// the generated texture
 	if ( !glConfig.isInitialized ) {
-		return;
-	}
-
-	if ( ! glConfig.cubeMapAvailable ) {
 		return;
 	}
 
@@ -1237,8 +1233,8 @@ bool idImage::CheckPrecompressedImage( bool fullLoad ) {
 	//	return false;
 	//}
 
-	// god i love last minute hacks :-)
-	if ( com_videoRam.GetInteger() >= 128 && imgName.Icmpn( "lights/", 7 ) == 0 ) {
+	// compressed light images may look ugly
+	if ( /*com_videoRam.GetInteger() >= 128 &&*/ imgName.Icmpn( "lights/", 7 ) == 0 ) {
 		return false;
 	}
 
@@ -1376,6 +1372,7 @@ void idImage::UploadPrecompressedImage( byte *data, int len ) {
 			break;
 		case DDS_MAKEFOURCC( 'A', 'T', 'I', '2' ):
 			internalFormat = GL_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT;
+			//internalFormat = GL_COMPRESSED_RED_GREEN_RGTC2_EXT;
 			break;
         default:
             common->Warning( "Invalid compressed internal format: %s", imgName.c_str() );
@@ -1636,7 +1633,7 @@ void idImage::Bind() {
 	tmu_t *tmu = &backEnd.glState.tmu[backEnd.glState.currenttmu];
 
 	// enable or disable apropriate texture modes
-	if ( tmu->textureType != type && ( backEnd.glState.currenttmu <	glConfig.maxTextureUnits ) ) {
+	if ( tmu->textureType != type && backEnd.glState.currenttmu < MAX_MULTITEXTURE_UNITS ) {
 		if ( tmu->textureType == TT_CUBIC ) {
 			qglDisable( GL_TEXTURE_CUBE_MAP );
 		} else if ( tmu->textureType == TT_2D ) {
@@ -1738,15 +1735,15 @@ CopyFramebuffer
 void idImage::CopyFramebuffer( int x, int y, int imageWidth, int imageHeight, bool useOversizedBuffer ) {
 	Bind();
 
-	if ( cvarSystem->GetCVarBool( "g_lowresFullscreenFX" ) ) {
+/*	if ( cvarSystem->GetCVarBool( "g_lowresFullscreenFX" ) ) {
 		imageWidth = 512;
 		imageHeight = 512;
-	}
+	}*/
 
 	// if the size isn't a power of 2, the image must be increased in size
-	int	potWidth, potHeight;
+	int	potWidth = imageWidth, potHeight = imageHeight;
 
-	if (r_useFbo.GetBool()) { // assume h/w support for non-po2 sizes
+	/*if (r_useFbo.GetBool()) { // assume h/w support for non-po2 sizes
 		potWidth = imageWidth;
 		potHeight = imageHeight;
 	} else {
@@ -1754,7 +1751,7 @@ void idImage::CopyFramebuffer( int x, int y, int imageWidth, int imageHeight, bo
 		potHeight = MakePowerOfTwo(imageHeight); 
 		GetDownsize( imageWidth, imageHeight ); // this line and the next one screw bloom in fbo
 		GetDownsize( potWidth, potHeight );
-	}
+	}*/
 
 	if (!r_useFbo.GetBool()) // duzenko #4425: not applicable, raises gl errors
 		qglReadBuffer(GL_BACK);
@@ -1844,42 +1841,6 @@ void idImage::CopyDepthBuffer( int x, int y, int imageWidth, int imageHeight, bo
 	qglCopyTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, x, y, imageWidth, imageHeight );
 	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR ); // GL_NEAREST for Soft Shadow ~SS
 	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR ); // GL_NEAREST
-	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
-	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-}
-
-/*
-====================
-CopyStencilBuffer
-
-This should just be part of copyFramebuffer once we have a proper image type field
-====================
-*/
-void idImage::CopyStencilBuffer( int x, int y, int imageWidth, int imageHeight )
-{
-	this->Bind();
-	// only resize if the current dimensions can't hold it at all,
-	// otherwise subview renderings could thrash this
-	if ( x + imageWidth > uploadWidth || y + imageHeight > uploadHeight )
-	{
-		uploadWidth = x + imageWidth;
-		uploadHeight = y + imageHeight;
-		// This bit runs once only at map start, because it tests whether the image is too small to hold the screen.
-		// It resizes the texture to a power of two that can hold the screen,
-		// and then subsequent captures to the texture put the depth component into the RGB channels
-		//qglTexImage2D( GL_TEXTURE_2D, 0, GL_STENCIL_INDEX8, uploadWidth, uploadHeight, 0, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, NULL );
-		//qglTexImage2D( GL_TEXTURE_2D, 0, GL_R8, uploadWidth, uploadHeight, 0, GL_RED, GL_UNSIGNED_BYTE, NULL );
-		qglTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, uploadWidth, uploadHeight, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL );
-	} else {
-		// otherwise, just subimage upload it so that drivers can tell we are going to be changing`
-		// it and don't try and do a texture compression or some other silliness.
-	}
-	const GLenum GL_DEPTH_STENCIL_TEXTURE_MODE = 0x90EA;
-	glTexParameteri( GL_TEXTURE_2D, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_STENCIL_INDEX );
-	qglCopyTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, x, y, imageWidth, imageHeight, 0 );
-	//qglCopyTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH_STENCIL, x, y, imageWidth, imageHeight, 0 );
-	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST ); // GL_NEAREST for Soft Shadow ~SS
-	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST ); // GL_NEAREST
 	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
 	qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
 }

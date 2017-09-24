@@ -25,6 +25,11 @@
 ===============================================================================
 */
 
+enum glVendor_t {
+	glvAny,
+	glvAMD,
+	glvIntel,
+};
 
 // Contains variables specific to the OpenGL configuration being run right now.
 // These are constant once the OpenGL subsystem is initialized.
@@ -34,25 +39,22 @@ typedef struct glconfig_s {
 	const char			*version_string;
 	const char			*extensions_string;
 	const char			*wgl_extensions_string;
+	glVendor_t			vendor;
 
 	float				glVersion;				// atof( version_string )
 
 	int					maxTextureSize;			// queried from GL
-	int					maxTextureUnits;
+	int					maxTextures;
 	int					maxTextureCoords;
-	int					maxTextureImageUnits;
 	float				maxTextureAnisotropy;
 	int					maxSamples;
 
 	int					colorBits, depthBits, stencilBits;
 
-	bool				multitextureAvailable;
 	bool				textureCompressionAvailable;
 	bool				anisotropicAvailable;
 	bool				textureLODBiasAvailable;
-	bool				cubeMapAvailable;
 	bool                mapBufferRangeAvailable;
-	//bool				vertexBufferObjectAvailable;
 	bool				twoSidedStencilAvailable;
 	bool				textureNonPowerOfTwoAvailable;
 	bool				depthBoundsTestAvailable;

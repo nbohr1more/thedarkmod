@@ -280,14 +280,12 @@ static void R_RemoteRender( drawSurf_t *surf, textureStage_t *stage ) {
 	viewDef_t		*parms;
 
 	// remote views can be reused in a single frame
-	if ( stage->dynamicFrameCount == tr.frameCount ) {
+	if ( stage->dynamicFrameCount == tr.frameCount ) 
 		return;
-	}
 
 	// if the entity doesn't have a remoteRenderView, do nothing
-	if ( !surf->space->entityDef->parms.remoteRenderView ) {
+	if ( !surf->space->entityDef->parms.remoteRenderView ) 
 		return;
-	}
 
 	// copy the viewport size from the original
 	parms = (viewDef_t *)R_FrameAlloc( sizeof( *parms ) );
@@ -322,9 +320,8 @@ static void R_RemoteRender( drawSurf_t *surf, textureStage_t *stage ) {
 
 	// copy this rendering to the image
 	stage->dynamicFrameCount = tr.frameCount;
-	if (!stage->image) {
+	if (!stage->image) 
 		stage->image = globalImages->scratchImage;
-	}
 
 	tr.CaptureRenderToImage( stage->image->imgName );
 	tr.UnCrop();
@@ -478,13 +475,11 @@ bool	R_GenerateSurfaceSubview( drawSurf_t *drawSurf ) {
 
 	scissor.Intersect( tr.viewDef->scissor );
 
-	if ( scissor.IsEmpty() ) {
-		// cropped out
+	if ( scissor.IsEmpty() ) // cropped out
 		return false;
-	}
 
 	// see what kind of subview we are making
-	if ( shader->GetSort() != SS_SUBVIEW ) {
+	//if ( shader->GetSort() != SS_SUBVIEW ) {
 		for ( int i = 0 ; i < shader->GetNumStages() ; i++ ) {
 			const shaderStage_t	*stage = shader->GetStage( i );
 			switch ( stage->texture.dynamic ) {
@@ -500,13 +495,12 @@ bool	R_GenerateSurfaceSubview( drawSurf_t *drawSurf ) {
 			}
 		}
 		return true;
-	}
+	//}
 
 	// issue a new view command
 	parms = R_MirrorViewBySurface( drawSurf );
-	if ( !parms ) {
+	if ( !parms ) 
 		return false;
-	}
 
 	parms->scissor = scissor;
 	parms->superView = tr.viewDef;
@@ -556,13 +550,11 @@ bool R_GenerateSubViews( void ) {
 		drawSurf = tr.viewDef->drawSurfs[i];
 		shader = drawSurf->material;
 
-		if ( !shader || !shader->HasSubview() ) {
+		if ( !shader || !shader->HasSubview() ) 
 			continue;
-		}
 
-		if ( R_GenerateSurfaceSubview( drawSurf ) ) {
+		if ( R_GenerateSurfaceSubview( drawSurf ) ) 
 			subviews = true;
-		}
 	}
 
 	return subviews;

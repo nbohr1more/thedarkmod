@@ -16,6 +16,7 @@
 #pragma hdrstop
 
 #include "tr_local.h"
+#include "FrameBuffer.h"
 
 backEndState_t	backEnd;
 
@@ -35,10 +36,7 @@ void RB_SetDefaultGLState( void ) {
 	qglColor4f (1.0f, 1.0f, 1.0f, 1.0f);
 
 	// the vertex array is always enabled
-	//qglEnableClientState( GL_VERTEX_ARRAY );
 	qglEnableVertexAttribArray( 0 );
-	//qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
-	//qglDisableClientState( GL_COLOR_ARRAY );
 
 	// make sure our GL state vector is set correctly
 	memset( &backEnd.glState, 0, sizeof( backEnd.glState ) );
@@ -61,17 +59,14 @@ void RB_SetDefaultGLState( void ) {
 	qglCullFace( GL_FRONT_AND_BACK );
 	qglShadeModel( GL_SMOOTH );
 
-	if ( r_useScissor.GetBool() ) {
+	if ( r_useScissor.GetBool() ) 
 		qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
-	}
 
-	for ( int i = glConfig.maxTextureUnits - 1 ; i >= 0 ; i-- ) {
+	for ( int i = MAX_MULTITEXTURE_UNITS - 1 ; i >= 0 ; i-- ) {
 		GL_SelectTexture( i );
 
 		qglDisable( GL_TEXTURE_2D );
-		if ( glConfig.cubeMapAvailable ) {
-			qglDisable( GL_TEXTURE_CUBE_MAP );
-		}
+		qglDisable( GL_TEXTURE_CUBE_MAP );
 	}
 }
 
@@ -102,11 +97,10 @@ GL_SelectTexture
 ====================
 */
 void GL_SelectTexture( const int unit ) {
-	if ( backEnd.glState.currenttmu == unit ) {
+	if ( backEnd.glState.currenttmu == unit ) 
 		return;
-	}
 
-	if ( unit < 0 || (unit >= glConfig.maxTextureUnits && unit >= glConfig.maxTextureImageUnits) ) {
+	if ( unit < 0 || unit >= MAX_MULTITEXTURE_UNITS ) {
 		common->Warning( "GL_SelectTexture: unit = %i", unit );
 		return;
 	}
@@ -437,7 +431,7 @@ static void	RB_SetBuffer( const void *data ) {
 		} else {
 			qglClearColor( 0.4f, 0.0f, 0.25f, 1.0f );
 		}
-		if (!r_useFbo.GetBool()) // duzenko #4425: not needed for default framebuffer, happens elsewhere for fbo
+		if ( !r_useFbo.GetBool() || !game->PlayerReady() ) // duzenko #4425: happens elsewhere for fbo, "Click when ready" skips FBO even with r_useFbo 1
 			qglClear( GL_COLOR_BUFFER_BIT );
 	}
 }
@@ -580,8 +574,6 @@ void RB_ExecuteBackEndCommands( const emptyCommand_t *cmds ) {
 	// upload any image loads that have completed
 	globalImages->CompleteBackgroundImageLoads();
 	bool v3d = false, was2d = false; // needs to be declared outside of switch case
-	extern void RB_FboEnter();
-	extern void RB_FboLeave( viewDef_t* viewDef );
 
 	while (cmds) {
 		switch ( cmds->commandId ) {
@@ -591,11 +583,11 @@ void RB_ExecuteBackEndCommands( const emptyCommand_t *cmds ) {
 			v3d = ((const drawSurfsCommand_t *)cmds)->viewDef->viewEntitys != NULL; // view is 2d or 3d
 			// duzenko #4425: create/switch to framebuffer object
 			if (((const drawSurfsCommand_t *)cmds)->viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID) // not lightgem
-				if (r_useFbo.GetBool() && !was2d) // don't switch to FBO if some 2d has happened (e.g. compass)
+				if (!was2d) // don't switch to FBO if some 2d has happened (e.g. compass)
 					if ( v3d ) {
-						RB_FboEnter();
+						FB_Enter();
 					} else {
-						RB_FboLeave( ((const drawSurfsCommand_t *)cmds)->viewDef ); // duzenko: render 2d in default framebuffer, hopefully no 3d drawing after this
+						FB_Leave( ((const drawSurfsCommand_t *)cmds)->viewDef ); // duzenko: render 2d in default framebuffer, as well as all 3d until frame end
 						was2d = true;
 					}
 			RB_DrawView(cmds);
@@ -615,7 +607,7 @@ void RB_ExecuteBackEndCommands( const emptyCommand_t *cmds ) {
 			break;
 		case RC_SWAP_BUFFERS:
 			// duzenko #4425: display the fbo content 
-			RB_FboLeave(NULL);
+			FB_Leave(NULL);
 			RB_SwapBuffers(cmds);
 			c_swapBuffers++;
 			break;

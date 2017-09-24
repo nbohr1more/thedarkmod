@@ -17,8 +17,8 @@
 #pragma hdrstop
 
 
-
 #include "tr_local.h"
+#include "FrameBuffer.h"
 
 // Vista OpenGL wrapper check
 #ifdef _WIN32
@@ -51,7 +51,7 @@ idCVar r_useTwoSidedStencil( "r_useTwoSidedStencil", "1", CVAR_RENDERER | CVAR_B
 idCVar r_useDeferredTangents( "r_useDeferredTangents", "1", CVAR_RENDERER | CVAR_BOOL, "defer tangents calculations after deform" );
 idCVar r_useCachedDynamicModels( "r_useCachedDynamicModels", "1", CVAR_RENDERER | CVAR_BOOL, "cache snapshots of dynamic models" );
 
-idCVar r_softShadows( "r_softShadows", "0", CVAR_RENDERER | CVAR_FLOAT, "Soft shadows. 0 = hard shadows, >0 = light radius" ); //~SteveL SS
+idCVar r_softShadows( "r_softShadows", "0", CVAR_RENDERER | CVAR_FLOAT | CVAR_ARCHIVE, "Soft shadows. 0 = hard shadows, >0 = light radius" ); //~SteveL SS
 /* ~ss
 idCVar r_softShadDebug( "ssdebug", "0", CVAR_RENDERER | CVAR_INTEGER, "Soft shadows debug. 1 = Show penumbra lines, 2 = show penumbra sampling regions, "
 																	  "4 = show light attenuation. Can be used together, e.g. 5 = 4 + 1 = show lines and attenuation."); 
@@ -168,7 +168,7 @@ idCVar com_smp( "com_smp", "1", CVAR_RENDERER | CVAR_BOOL | CVAR_ARCHIVE, "enabl
 idCVar r_showSmp( "r_showSmp", "0", CVAR_RENDERER | CVAR_BOOL, "show which end (front or back) is blocking" );
 idCVar r_logSmpTimings( "r_logSmpTimings", "0", CVAR_RENDERER | CVAR_BOOL, "log timings for frontend and backend rendering" );
 idCVar r_showLights( "r_showLights", "0", CVAR_RENDERER | CVAR_INTEGER, "1 = just print volumes numbers, highlighting ones covering the view, 2 = also draw planes of each volume, 3 = also draw edges of each volume", 0, 3, idCmdSystem::ArgCompletion_Integer<0,3> );
-idCVar r_showShadows( "r_showShadows", "0", CVAR_RENDERER | CVAR_INTEGER, "1 = visualize the stencil shadow volumes, 2 = draw filled in", 0, 3, idCmdSystem::ArgCompletion_Integer<0,3> );
+idCVar r_showShadows( "r_showShadows", "0", CVAR_RENDERER | CVAR_INTEGER, "1 = visualize the stencil shadow volumes, 2 = draw filled in, 3 = lines with depth test", -1, 3, idCmdSystem::ArgCompletion_Integer<-1,3> );
 idCVar r_showShadowCount( "r_showShadowCount", "0", CVAR_RENDERER | CVAR_INTEGER, "colors screen based on shadow volume depth complexity, >= 2 = print overdraw count based on stencil index values, 3 = only show turboshadows, 4 = only show static shadows", 0, 4, idCmdSystem::ArgCompletion_Integer<0,4> );
 idCVar r_showLightScissors( "r_showLightScissors", "0", CVAR_RENDERER | CVAR_BOOL, "show light scissor rectangles" );
 idCVar r_showEntityScissors( "r_showEntityScissors", "0", CVAR_RENDERER | CVAR_BOOL, "show entity scissor rectangles" );
@@ -231,7 +231,7 @@ idCVar r_postprocess_bloomKernelSize( "r_postprocess_bloomKernelSize", "2", CVAR
 
 // 2016-2017 additions by duzenko
 idCVar r_useAnonreclaimer( "r_useAnonreclaimer", "0", CVAR_RENDERER | CVAR_BOOL, "test anonreclaimer patch" );
-idCVar r_useFbo( "r_useFbo", "0", CVAR_RENDERER | CVAR_BOOL | CVAR_ARCHIVE, "Use framebuffer objects" );
+idCVar r_useFbo( "r_useFBO", "0", CVAR_RENDERER | CVAR_BOOL | CVAR_ARCHIVE, "Use framebuffer objects" );
 idCVar r_useGLSL( "r_useGLSL", "1", CVAR_RENDERER | CVAR_BOOL | CVAR_ARCHIVE, "Use GLSL shaders instead of ARB" );
 idCVar r_fboDebug("r_fboDebug", "0", CVAR_RENDERER | CVAR_INTEGER, "0-3 individual fbo attachments");
 idCVar r_fboColorBits("r_fboColorBits", "32", CVAR_RENDERER | CVAR_INTEGER | CVAR_ARCHIVE, "15, 32");
@@ -311,25 +311,8 @@ PFNGLPROGRAMLOCALPARAMETER4FVARBPROC	qglProgramLocalParameter4fvARB;
 // GL_EXT_depth_bounds_test
 PFNGLDEPTHBOUNDSEXTPROC                 qglDepthBoundsEXT;
 
-// mipmaps
-PFNGLGENERATEMIPMAPPROC					glGenerateMipmap;
-
-
-// frame buffers
-PFNGLGENFRAMEBUFFERSPROC				glGenFramebuffers;
-PFNGLBINDFRAMEBUFFERPROC 				glBindFramebuffer;
-PFNGLDELETEFRAMEBUFFERSPROC				glDeleteFramebuffers;
-PFNGLBLITFRAMEBUFFERPROC				glBlitFramebuffer;
-PFNGLFRAMEBUFFERTEXTURE2DPROC			glFramebufferTexture2D;
-PFNGLCHECKFRAMEBUFFERSTATUSPROC			glCheckFramebufferStatus;
-PFNGLGENRENDERBUFFERSPROC				glGenRenderbuffers;
-PFNGLBINDRENDERBUFFERPROC				glBindRenderbuffer;
-PFNGLRENDERBUFFERSTORAGEPROC			glRenderbufferStorage;
-PFNGLFRAMEBUFFERRENDERBUFFERPROC		glFramebufferRenderbuffer;
-PFNGLDRAWBUFFERSPROC					glDrawBuffers;
-
 // arb assembly info
-PFNGLGETPROGRAMIVARBPROC				glGetProgramivARB;
+PFNGLGETPROGRAMIVARBPROC				qglGetProgramivARB;
 
 // -----====+++  BEGIN TDM ~SS Extensions  +++====-----   
 
@@ -355,6 +338,7 @@ PFNGLBLITFRAMEBUFFERPROC				qglBlitFramebuffer;
 PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC qglRenderbufferStorageMultisample;
 PFNGLFRAMEBUFFERTEXTURELAYERPROC		qglFramebufferTextureLayer;
 PFNGLDRAWBUFFERSPROC					qglDrawBuffers;
+PFNGLCOPYIMAGESUBDATANVPROC				glCopyImageSubData;
 
 // GLSL
 PFNGLATTACHSHADERPROC						qglAttachShader;
@@ -434,25 +418,19 @@ static void R_CheckPortableExtensions( void ) {
 	common->Printf( "Checking portable OpenGL extensions...\n" );
 
 	// GL_ARB_multitexture
-	glConfig.multitextureAvailable = R_CheckExtension( "GL_ARB_multitexture" );
-	if ( glConfig.multitextureAvailable ) {
-		/*qglMultiTexCoord2fARB = (void(APIENTRY *)(GLenum, GLfloat, GLfloat))GLimp_ExtensionPointer( "glMultiTexCoord2fARB" );
-		qglMultiTexCoord2fvARB = (void(APIENTRY *)(GLenum, GLfloat *))GLimp_ExtensionPointer( "glMultiTexCoord2fvARB" );*/
-		qglActiveTexture = (void(APIENTRY *)(GLenum))GLimp_ExtensionPointer( "glActiveTexture" );
-		qglGetIntegerv( GL_MAX_TEXTURE_UNITS_ARB, (GLint *)&glConfig.maxTextureUnits );
-		if ( glConfig.maxTextureUnits > MAX_MULTITEXTURE_UNITS ) {
-			glConfig.maxTextureUnits = MAX_MULTITEXTURE_UNITS;
-		}
-		if ( glConfig.maxTextureUnits < 2 ) {
-			glConfig.multitextureAvailable = false;	// shouldn't ever happen
-		}
-		common->Printf( "Max texture units: %d\n", glConfig.maxTextureUnits );
-		qglGetIntegerv( GL_MAX_TEXTURE_COORDS_ARB, (GLint *)&glConfig.maxTextureCoords );
-		qglGetIntegerv( GL_MAX_TEXTURE_IMAGE_UNITS_ARB, (GLint *)&glConfig.maxTextureImageUnits );
-	}
+	if (!R_CheckExtension( "GL_ARB_multitexture" ))
+		common->Error( "GL_ARB_multitexture not supported!\n" );
+	qglActiveTexture = (void(APIENTRY *)(GLenum))GLimp_ExtensionPointer( "glActiveTexture" );
+	qglGetIntegerv( GL_MAX_TEXTURE_COORDS_ARB, &glConfig.maxTextureCoords );
+	common->Printf( "Max texture coords: %d\n", glConfig.maxTextureCoords );
+	qglGetIntegerv( GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &glConfig.maxTextures );
+	common->Printf( "Max active textures: %d\n", glConfig.maxTextures );
+	if ( glConfig.maxTextures < MAX_MULTITEXTURE_UNITS )
+		common->Error( "   Too few!\n" );
 
 	// GL_ARB_texture_cube_map
-	glConfig.cubeMapAvailable = R_CheckExtension( "GL_ARB_texture_cube_map" );
+	if (!R_CheckExtension( "GL_ARB_texture_cube_map" ))
+		common->Error( "GL_ARB_texture_cube_map not supported!\n" );
 
 	// GL_ARB_texture_non_power_of_two
 	glConfig.textureNonPowerOfTwoAvailable = R_CheckExtension( "GL_ARB_texture_non_power_of_two" );
@@ -536,20 +514,56 @@ static void R_CheckPortableExtensions( void ) {
 	qglProgramEnvParameter4fvARB = (PFNGLPROGRAMENVPARAMETER4FVARBPROC)GLimp_ExtensionPointer( "glProgramEnvParameter4fvARB" );
 	qglProgramLocalParameter4fvARB = (PFNGLPROGRAMLOCALPARAMETER4FVARBPROC)GLimp_ExtensionPointer( "glProgramLocalParameter4fvARB" );
 
-	// check for minimum set
-	if ( !glConfig.multitextureAvailable || !glConfig.cubeMapAvailable ) 
-		common->Error( common->Translate( "#str_02015" ) );
-
  	// GL_EXT_depth_bounds_test
  	glConfig.depthBoundsTestAvailable = R_CheckExtension( "EXT_depth_bounds_test" );
  	if ( glConfig.depthBoundsTestAvailable ) {
  		qglDepthBoundsEXT = (PFNGLDEPTHBOUNDSEXTPROC)GLimp_ExtensionPointer( "glDepthBoundsEXT" );
  	}
 	
-		//* -----====+++|  BEGIN TDM ~SS Extensions  |+++====-----   
+	// GLSL
+	qglAttachShader = (PFNGLATTACHSHADERPROC)GLimp_ExtensionPointer( "glAttachShader" );
+	qglCompileShader = (PFNGLCOMPILESHADERPROC)GLimp_ExtensionPointer( "glCompileShader" );
+	qglCreateProgram = (PFNGLCREATEPROGRAMPROC)GLimp_ExtensionPointer( "glCreateProgram" );
+	qglCreateShader = (PFNGLCREATESHADERPROC)GLimp_ExtensionPointer( "glCreateShader" );
+	qglLinkProgram = (PFNGLLINKPROGRAMPROC)GLimp_ExtensionPointer( "glLinkProgram" );
+	qglShaderSource = (PFNGLSHADERSOURCEPROC)GLimp_ExtensionPointer( "glShaderSource" );
+	qglUseProgram = (PFNGLUSEPROGRAMPROC)GLimp_ExtensionPointer( "glUseProgram" );
+	qglUniform1f = (PFNGLUNIFORM1FPROC)GLimp_ExtensionPointer( "glUniform1f" );
+	qglUniform2f = (PFNGLUNIFORM2FPROC)GLimp_ExtensionPointer( "glUniform2f" );
+	qglUniform3f = (PFNGLUNIFORM3FPROC)GLimp_ExtensionPointer( "glUniform3f" );
+	qglUniform4f = (PFNGLUNIFORM4FPROC)GLimp_ExtensionPointer( "glUniform4f" );
+	qglUniform1i = (PFNGLUNIFORM1IPROC)GLimp_ExtensionPointer( "glUniform1i" );
+	qglUniform2i = (PFNGLUNIFORM2IPROC)GLimp_ExtensionPointer( "glUniform2i" );
+	qglUniform3i = (PFNGLUNIFORM3IPROC)GLimp_ExtensionPointer( "glUniform3i" );
+	qglUniform4i = (PFNGLUNIFORM4IPROC)GLimp_ExtensionPointer( "glUniform4i" );
+	qglUniform1fv = (PFNGLUNIFORM1FVPROC)GLimp_ExtensionPointer( "glUniform1fv" );
+	qglUniform2fv = (PFNGLUNIFORM2FVPROC)GLimp_ExtensionPointer( "glUniform2fv" );
+	qglUniform3fv = (PFNGLUNIFORM3FVPROC)GLimp_ExtensionPointer( "glUniform3fv" );
+	qglUniform4fv = (PFNGLUNIFORM4FVPROC)GLimp_ExtensionPointer( "glUniform4fv" );
+	qglUniform1iv = (PFNGLUNIFORM1IVPROC)GLimp_ExtensionPointer( "glUniform1iv" );
+	qglUniform2iv = (PFNGLUNIFORM2IVPROC)GLimp_ExtensionPointer( "glUniform2iv" );
+	qglUniform3iv = (PFNGLUNIFORM3IVPROC)GLimp_ExtensionPointer( "glUniform3iv" );
+	qglUniform4iv = (PFNGLUNIFORM4IVPROC)GLimp_ExtensionPointer( "glUniform4iv" );
+	qglUniformMatrix2fv = (PFNGLUNIFORMMATRIX2FVPROC)GLimp_ExtensionPointer( "glUniformMatrix2fv" );
+	qglUniformMatrix3fv = (PFNGLUNIFORMMATRIX3FVPROC)GLimp_ExtensionPointer( "glUniformMatrix3fv" );
+	qglUniformMatrix4fv = (PFNGLUNIFORMMATRIX4FVPROC)GLimp_ExtensionPointer( "glUniformMatrix4fv" );
+	qglValidateProgram = (PFNGLVALIDATEPROGRAMPROC)GLimp_ExtensionPointer( "glValidateProgram" );
+	qglGetShaderiv = (PFNGLGETSHADERIVPROC)GLimp_ExtensionPointer( "glGetShaderiv" );
+	qglGetAttribLocation = (PFNGLGETATTRIBLOCATIONPROC)GLimp_ExtensionPointer( "glGetAttribLocation" );
+	qglGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)GLimp_ExtensionPointer( "glGetUniformLocation" );
+	qglIsProgram = (PFNGLISPROGRAMPROC)GLimp_ExtensionPointer( "glIsProgram" );
+	qglIsShader = (PFNGLISSHADERPROC)GLimp_ExtensionPointer( "glIsShader" );
+	qglGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC)GLimp_ExtensionPointer( "glGetShaderInfoLog" );
+	qglDeleteProgram = (PFNGLDELETEPROGRAMPROC)GLimp_ExtensionPointer( "glDeleteProgram" );
+	qglDeleteShader = (PFNGLDELETESHADERPROC)GLimp_ExtensionPointer( "glDeleteShader" );
+	qglGetProgramiv = (PFNGLGETPROGRAMIVPROC)GLimp_ExtensionPointer( "glGetProgramiv" );
+	qglGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)GLimp_ExtensionPointer( "glGetProgramInfoLog" );
+	qglBindAttribLocation = (PFNGLBINDATTRIBLOCATIONPROC)GLimp_ExtensionPointer( "glBindAttribLocation" );
 
-	//if ( glConfig.glVersion > 3.0 ) 
-	{
+	bool hasArbFramebuffer = R_CheckExtension( "GL_ARB_framebuffer_object" );
+	if ( hasArbFramebuffer ) {
+		glConfig.framebufferObjectAvailable = true;
+		glConfig.framebufferBlitAvailable = true;
 		// Frame Buffer Objects
 		qglIsRenderbuffer = (PFNGLISRENDERBUFFERPROC)GLimp_ExtensionPointer( "glIsRenderbuffer" );
 		qglBindRenderbuffer = (PFNGLBINDRENDERBUFFERPROC)GLimp_ExtensionPointer( "glBindRenderbuffer" );
@@ -571,50 +585,28 @@ static void R_CheckPortableExtensions( void ) {
 		qglBlitFramebuffer = (PFNGLBLITFRAMEBUFFERPROC)GLimp_ExtensionPointer( "glBlitFramebuffer" );
 		qglRenderbufferStorageMultisample = (PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC)GLimp_ExtensionPointer( "glRenderbufferStorageMultisample" );
 		qglFramebufferTextureLayer = (PFNGLFRAMEBUFFERTEXTURELAYERPROC)GLimp_ExtensionPointer( "glFramebufferTextureLayer" );
-		qglDrawBuffers = (PFNGLDRAWBUFFERSPROC)GLimp_ExtensionPointer( "glDrawBuffers" );	
-
-		// GLSL
-		qglAttachShader = (PFNGLATTACHSHADERPROC)GLimp_ExtensionPointer( "glAttachShader" );
-		qglCompileShader = (PFNGLCOMPILESHADERPROC)GLimp_ExtensionPointer( "glCompileShader" );
-		qglCreateProgram = (PFNGLCREATEPROGRAMPROC)GLimp_ExtensionPointer( "glCreateProgram" );
-		qglCreateShader = (PFNGLCREATESHADERPROC)GLimp_ExtensionPointer( "glCreateShader" );
-		qglLinkProgram = (PFNGLLINKPROGRAMPROC)GLimp_ExtensionPointer( "glLinkProgram" );
-		qglShaderSource = (PFNGLSHADERSOURCEPROC)GLimp_ExtensionPointer( "glShaderSource" );
-		qglUseProgram = (PFNGLUSEPROGRAMPROC)GLimp_ExtensionPointer( "glUseProgram" );
-		qglUniform1f = (PFNGLUNIFORM1FPROC)GLimp_ExtensionPointer( "glUniform1f" );
-		qglUniform2f = (PFNGLUNIFORM2FPROC)GLimp_ExtensionPointer( "glUniform2f" );
-		qglUniform3f = (PFNGLUNIFORM3FPROC)GLimp_ExtensionPointer( "glUniform3f" );
-		qglUniform4f = (PFNGLUNIFORM4FPROC)GLimp_ExtensionPointer( "glUniform4f" );
-		qglUniform1i = (PFNGLUNIFORM1IPROC)GLimp_ExtensionPointer( "glUniform1i" );
-		qglUniform2i = (PFNGLUNIFORM2IPROC)GLimp_ExtensionPointer( "glUniform2i" );
-		qglUniform3i = (PFNGLUNIFORM3IPROC)GLimp_ExtensionPointer( "glUniform3i" );
-		qglUniform4i = (PFNGLUNIFORM4IPROC)GLimp_ExtensionPointer( "glUniform4i" );
-		qglUniform1fv = (PFNGLUNIFORM1FVPROC)GLimp_ExtensionPointer( "glUniform1fv" );
-		qglUniform2fv = (PFNGLUNIFORM2FVPROC)GLimp_ExtensionPointer( "glUniform2fv" );
-		qglUniform3fv = (PFNGLUNIFORM3FVPROC)GLimp_ExtensionPointer( "glUniform3fv" );
-		qglUniform4fv = (PFNGLUNIFORM4FVPROC)GLimp_ExtensionPointer( "glUniform4fv" );
-		qglUniform1iv = (PFNGLUNIFORM1IVPROC)GLimp_ExtensionPointer( "glUniform1iv" );
-		qglUniform2iv = (PFNGLUNIFORM2IVPROC)GLimp_ExtensionPointer( "glUniform2iv" );
-		qglUniform3iv = (PFNGLUNIFORM3IVPROC)GLimp_ExtensionPointer( "glUniform3iv" );
-		qglUniform4iv = (PFNGLUNIFORM4IVPROC)GLimp_ExtensionPointer( "glUniform4iv" );
-		qglUniformMatrix2fv = (PFNGLUNIFORMMATRIX2FVPROC)GLimp_ExtensionPointer( "glUniformMatrix2fv" );
-		qglUniformMatrix3fv = (PFNGLUNIFORMMATRIX3FVPROC)GLimp_ExtensionPointer( "glUniformMatrix3fv" );
-		qglUniformMatrix4fv = (PFNGLUNIFORMMATRIX4FVPROC)GLimp_ExtensionPointer( "glUniformMatrix4fv" );
-		qglValidateProgram = (PFNGLVALIDATEPROGRAMPROC)GLimp_ExtensionPointer( "glValidateProgram" );
-		qglGetShaderiv = (PFNGLGETSHADERIVPROC)GLimp_ExtensionPointer( "glGetShaderiv" );
-		qglGetAttribLocation = (PFNGLGETATTRIBLOCATIONPROC)GLimp_ExtensionPointer( "glGetAttribLocation" );
-		qglGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)GLimp_ExtensionPointer( "glGetUniformLocation" );
-		qglIsProgram = (PFNGLISPROGRAMPROC)GLimp_ExtensionPointer( "glIsProgram" );
-		qglIsShader = (PFNGLISSHADERPROC)GLimp_ExtensionPointer( "glIsShader" );
-		qglGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC)GLimp_ExtensionPointer( "glGetShaderInfoLog" );
-		qglDeleteProgram = (PFNGLDELETEPROGRAMPROC)GLimp_ExtensionPointer( "glDeleteProgram" );
-		qglDeleteShader = (PFNGLDELETESHADERPROC)GLimp_ExtensionPointer( "glDeleteShader" );
-		qglGetProgramiv = (PFNGLGETPROGRAMIVPROC)GLimp_ExtensionPointer( "glGetProgramiv" );
-		qglGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)GLimp_ExtensionPointer( "glGetProgramInfoLog" );
-		qglBindAttribLocation = (PFNGLBINDATTRIBLOCATIONPROC)GLimp_ExtensionPointer( "glBindAttribLocation" );
-
+		qglDrawBuffers = (PFNGLDRAWBUFFERSPROC)GLimp_ExtensionPointer( "glDrawBuffers" );
+		glCopyImageSubData = (PFNGLCOPYIMAGESUBDATANVPROC)GLimp_ExtensionPointer( "glCopyImageSubData" );
 		// State management
 		//qglBlendEquation = (PFNGLBLENDEQUATIONPROC)GLimp_ExtensionPointer( "glBlendEquation" );
+	} else {
+		glConfig.framebufferObjectAvailable = R_CheckExtension( "GL_EXT_framebuffer_object" );
+		glConfig.framebufferBlitAvailable = R_CheckExtension( "GL_EXT_framebuffer_blit" );
+		if ( glConfig.framebufferObjectAvailable ) {
+			qglGenFramebuffers = (PFNGLGENFRAMEBUFFERSEXTPROC)GLimp_ExtensionPointer( "glGenFramebuffersEXT" );
+			qglBindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)GLimp_ExtensionPointer( "glBindFramebufferEXT" );
+			qglDeleteFramebuffers = (PFNGLDELETEFRAMEBUFFERSPROC)GLimp_ExtensionPointer( "glDeleteFramebuffersEXT" );
+			qglFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DEXTPROC)GLimp_ExtensionPointer( "glFramebufferTexture2DEXT" );
+			qglCheckFramebufferStatus = (PFNGLCHECKFRAMEBUFFERSTATUSEXTPROC)GLimp_ExtensionPointer( "glCheckFramebufferStatusEXT" );
+			qglGenRenderbuffers = (PFNGLGENRENDERBUFFERSEXTPROC)GLimp_ExtensionPointer( "glGenRenderbuffersEXT" );
+			qglBindRenderbuffer = (PFNGLBINDRENDERBUFFEREXTPROC)GLimp_ExtensionPointer( "glBindRenderbufferEXT" );
+			qglRenderbufferStorage = (PFNGLRENDERBUFFERSTORAGEEXTPROC)GLimp_ExtensionPointer( "glRenderbufferStorageEXT" );
+			qglFramebufferRenderbuffer = (PFNGLFRAMEBUFFERRENDERBUFFEREXTPROC)GLimp_ExtensionPointer( "glFramebufferRenderbufferEXT" );
+			qglGenerateMipmap = (PFNGLGENERATEMIPMAPPROC)GLimp_ExtensionPointer( "glGenerateMipmapEXT" ); // why here?
+		}
+		if ( glConfig.framebufferBlitAvailable ) {
+			qglBlitFramebuffer = (PFNGLBLITFRAMEBUFFEREXTPROC)GLimp_ExtensionPointer( "glBlitFramebufferEXT" );
+		}
 	}
 
 //	 -----====+++|   END TDM ~SS Extensions   |+++====-----   */
@@ -622,46 +614,9 @@ static void R_CheckPortableExtensions( void ) {
 	glConfig.pixelBufferAvailable = R_CheckExtension("ARB_pixel_buffer_object");
 
 	glConfig.multipleRenderTargetsAvailable = R_CheckExtension( "GL_ARB_draw_buffers" );
-	if ( glConfig.multipleRenderTargetsAvailable ) {
+	/*if ( glConfig.multipleRenderTargetsAvailable ) {
 		glDrawBuffers = (PFNGLDRAWBUFFERSPROC)GLimp_ExtensionPointer("glDrawBuffers");
-	}
-	glGetProgramivARB = (PFNGLGETPROGRAMIVARBPROC)GLimp_ExtensionPointer( "glGetProgramivARB" );
-
-	bool hasArbFramebuffer = R_CheckExtension( "GL_ARB_framebuffer_object" );
-	if ( hasArbFramebuffer ) {
-		glConfig.framebufferObjectAvailable = true;
-		glConfig.framebufferBlitAvailable = true;
-		glGenFramebuffers= (PFNGLGENFRAMEBUFFERSEXTPROC)GLimp_ExtensionPointer("glGenFramebuffers");
-		glBindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)GLimp_ExtensionPointer( "glBindFramebuffer" );
-		glDeleteFramebuffers = (PFNGLDELETEFRAMEBUFFERSPROC)GLimp_ExtensionPointer( "glDeleteFramebuffers" );
-		glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DEXTPROC)GLimp_ExtensionPointer( "glFramebufferTexture2D" );
-		glCheckFramebufferStatus= (PFNGLCHECKFRAMEBUFFERSTATUSEXTPROC)GLimp_ExtensionPointer("glCheckFramebufferStatus");
-		glGenRenderbuffers= (PFNGLGENRENDERBUFFERSEXTPROC)GLimp_ExtensionPointer("glGenRenderbuffers");
-		glBindRenderbuffer= (PFNGLBINDRENDERBUFFEREXTPROC)GLimp_ExtensionPointer("glBindRenderbuffer");
-		glRenderbufferStorage= (PFNGLRENDERBUFFERSTORAGEEXTPROC)GLimp_ExtensionPointer("glRenderbufferStorage");
-		glFramebufferRenderbuffer= (PFNGLFRAMEBUFFERRENDERBUFFEREXTPROC)GLimp_ExtensionPointer("glFramebufferRenderbuffer");
-		glBlitFramebuffer= (PFNGLBLITFRAMEBUFFEREXTPROC)GLimp_ExtensionPointer("glBlitFramebuffer");
-		glGenerateMipmap = (PFNGLGENERATEMIPMAPPROC)GLimp_ExtensionPointer("glGenerateMipmap");
-	}
-	else {
-		glConfig.framebufferObjectAvailable = R_CheckExtension( "GL_EXT_framebuffer_object" );
-		glConfig.framebufferBlitAvailable = R_CheckExtension( "GL_EXT_framebuffer_blit" );
-		if (glConfig.framebufferObjectAvailable) {
-			glGenFramebuffers= (PFNGLGENFRAMEBUFFERSEXTPROC)GLimp_ExtensionPointer("glGenFramebuffersEXT");
-			glBindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)GLimp_ExtensionPointer( "glBindFramebufferEXT" );
-			glDeleteFramebuffers = (PFNGLDELETEFRAMEBUFFERSPROC)GLimp_ExtensionPointer( "glDeleteFramebuffersEXT" );
-			glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DEXTPROC)GLimp_ExtensionPointer( "glFramebufferTexture2DEXT" );
-			glCheckFramebufferStatus= (PFNGLCHECKFRAMEBUFFERSTATUSEXTPROC)GLimp_ExtensionPointer("glCheckFramebufferStatusEXT");
-			glGenRenderbuffers= (PFNGLGENRENDERBUFFERSEXTPROC)GLimp_ExtensionPointer("glGenRenderbuffersEXT");
-			glBindRenderbuffer= (PFNGLBINDRENDERBUFFEREXTPROC)GLimp_ExtensionPointer("glBindRenderbufferEXT");
-			glRenderbufferStorage= (PFNGLRENDERBUFFERSTORAGEEXTPROC)GLimp_ExtensionPointer("glRenderbufferStorageEXT");
-			glFramebufferRenderbuffer= (PFNGLFRAMEBUFFERRENDERBUFFEREXTPROC)GLimp_ExtensionPointer("glFramebufferRenderbufferEXT");
-			glGenerateMipmap = (PFNGLGENERATEMIPMAPPROC)GLimp_ExtensionPointer("glGenerateMipmapEXT");
-		}
-		if (glConfig.framebufferBlitAvailable) {
-			glBlitFramebuffer= (PFNGLBLITFRAMEBUFFEREXTPROC)GLimp_ExtensionPointer("glBlitFramebufferEXT");
-		}
-	}
+	}*/
 
 	glConfig.fenceSyncAvailable = R_CheckExtension( "GL_ARB_sync" );
 	if( glConfig.fenceSyncAvailable ) {
@@ -674,8 +629,9 @@ static void R_CheckPortableExtensions( void ) {
 	int n;
 	qglGetIntegerv( GL_MAX_VERTEX_ATTRIBS, &n );
 	common->Printf( "Max vertex attribs: %d\n", n );
-	if (glGetProgramivARB) {
-		glGetProgramivARB( GL_FRAGMENT_PROGRAM_ARB, GL_MAX_PROGRAM_ENV_PARAMETERS_ARB, &n );
+	qglGetProgramivARB = (PFNGLGETPROGRAMIVARBPROC)GLimp_ExtensionPointer( "glGetProgramivARB" );
+	if ( qglGetProgramivARB ) {
+		qglGetProgramivARB( GL_FRAGMENT_PROGRAM_ARB, GL_MAX_PROGRAM_ENV_PARAMETERS_ARB, &n );
 		common->Printf( "Max env parameters: %d\n", n );
 	}
 }
@@ -813,6 +769,11 @@ void R_InitOpenGL( void ) {
 	glConfig.version_string = (const char *)qglGetString(GL_VERSION);
 	glConfig.extensions_string = (const char *)qglGetString(GL_EXTENSIONS);
 
+	if ( strcmp( glConfig.vendor_string, "Intel" ) == 0 )
+		glConfig.vendor = glvIntel;
+	if ( strcmp( glConfig.vendor_string, "ATI Technologies Inc." ) == 0 )
+		glConfig.vendor = glvAMD;
+
 	// OpenGL driver constants
 	qglGetIntegerv( GL_MAX_TEXTURE_SIZE, &temp );
 	glConfig.maxTextureSize = temp;
@@ -843,10 +804,6 @@ void R_InitOpenGL( void ) {
 	// allocate the vertex array range or vertex objects
 	vertexCache.Init();
 
-	// select which renderSystem we are going to use
-	//r_renderer.SetModified();
-	//tr.SetBackEndRenderer();
-
 	// allocate the frame data, which may be more if smp is enabled
 	R_InitFrameData();
 
@@ -854,8 +811,7 @@ void R_InitOpenGL( void ) {
 	R_SetColorMappings();
 
 	// duzenko #4425 reset fbo
-	extern GLuint fboId; // FIXME ugly 'magic' extern
-	fboId = 0;
+	FB_Clear();
 
 #ifdef _WIN32
 	static bool glCheck = false;
@@ -914,6 +870,9 @@ void GL_CheckErrors( void ) {
 				break;
 			case GL_OUT_OF_MEMORY:
 				strcpy( s, "GL_OUT_OF_MEMORY" );
+				break;
+			case GL_INVALID_FRAMEBUFFER_OPERATION:
+				strcpy( s, "GL_INVALID_FRAMEBUFFER_OPERATION" );
 				break;
 			default:
 				idStr::snPrintf( s, sizeof(s), "%i", err);
@@ -1679,7 +1638,6 @@ envshot <basename>
 Saves out env/<basename>_ft.tga, etc
 ================== 
 */  
-//const static char *cubeExtensions[6] = { "_px.tga", "_nx.tga", "_py.tga", "_ny.tga", "_pz.tga", "_nz.tga" };
 const static char *cubeExtensions[6] = { "_forward.tga", "_left.tga", "_right.tga", "_back.tga", "_down.tga", "_up.tga" }; // names changed for TDM in #4041
 
 void R_EnvShot_f( const idCmdArgs &args ) {
@@ -1757,60 +1715,6 @@ void R_EnvShot_f( const idCmdArgs &args ) {
 
 //============================================================================
 
-static idMat3		cubeAxis[6];
-
-
-/*
-==================
-R_SampleCubeMap
-==================
-*/
-void R_SampleCubeMap( const idVec3 &dir, int size, byte *buffers[6], byte result[4] ) {
-	float	adir[3];
-	int		axis, x, y;
-
-	adir[0] = fabs(dir[0]);
-	adir[1] = fabs(dir[1]);
-	adir[2] = fabs(dir[2]);
-
-	if ( dir[0] >= adir[1] && dir[0] >= adir[2] ) {
-		axis = 0;
-	} else if ( -dir[0] >= adir[1] && -dir[0] >= adir[2] ) {
-		axis = 1;
-	} else if ( dir[1] >= adir[0] && dir[1] >= adir[2] ) {
-		axis = 2;
-	} else if ( -dir[1] >= adir[0] && -dir[1] >= adir[2] ) {
-		axis = 3;
-	} else if ( dir[2] >= adir[1] && dir[2] >= adir[2] ) {
-		axis = 4;
-	} else {
-		axis = 5;
-	}
-
-	float	fx = (dir * cubeAxis[axis][1]) / (dir * cubeAxis[axis][0]);
-	float	fy = (dir * cubeAxis[axis][2]) / (dir * cubeAxis[axis][0]);
-
-	fx = -fx;
-	fy = -fy;
-	x = size * 0.5 * (fx + 1);
-	y = size * 0.5 * (fy + 1);
-	if ( x < 0 ) {
-		x = 0;
-	} else if ( x >= size ) {
-		x = size-1;
-	}
-	if ( y < 0 ) {
-		y = 0;
-	} else if ( y >= size ) {
-		y = size-1;
-	}
-
-	result[0] = buffers[axis][(y*size+x)*4+0];
-	result[1] = buffers[axis][(y*size+x)*4+1];
-	result[2] = buffers[axis][(y*size+x)*4+2];
-	result[3] = buffers[axis][(y*size+x)*4+3];
-}
-
 
 /* 
 ================== 
@@ -1822,133 +1726,83 @@ Saves out env/<basename>_amb_ft.tga, etc
 ================== 
 */  
 void R_MakeAmbientMap_f( const idCmdArgs &args ) {
-	//const static char *cubeExtensions[6] = { "_px.tga", "_nx.tga", "_py.tga", "_ny.tga", "_pz.tga", "_nz.tga" };
+	MakeAmbientMapParam param;
 	idStr		fullname;
 	const char	*baseName;
-	int			outSize;
-	byte		*buffers[6];
-	int			width, height;
 
-	if ( args.Argc() != 2 && args.Argc() != 3 ) {
-		common->Printf( "USAGE: ambientshot <basename> [size]\n" );
+	if ( args.Argc() < 2 || args.Argc() > 6 ) {
+		common->Printf( "USAGE: MakeAmbientMap <basename> [size [sample_count [crutch_up [specular?]]]]\n" );
 		return;
 	}
 	baseName = args.Argv( 1 );
+	
+	byte* facepalm[6];
+	param.buffers = facepalm;
 
-	if ( args.Argc() == 3 ) {
-		outSize = atoi( args.Argv( 2 ) );
-	} else {
-		outSize = 32;
-	}
-
-	memset( &cubeAxis, 0, sizeof( cubeAxis ) );
-	cubeAxis[0][0][0] = 1;
-	cubeAxis[0][1][2] = 1;
-	cubeAxis[0][2][1] = 1;
-
-	cubeAxis[1][0][0] = -1;
-	cubeAxis[1][1][2] = -1;
-	cubeAxis[1][2][1] = 1;
-
-	cubeAxis[2][0][1] = 1;
-	cubeAxis[2][1][0] = -1;
-	cubeAxis[2][2][2] = -1;
-
-	cubeAxis[3][0][1] = -1;
-	cubeAxis[3][1][0] = -1;
-	cubeAxis[3][2][2] = 1;
-
-	cubeAxis[4][0][2] = 1;
-	cubeAxis[4][1][0] = -1;
-	cubeAxis[4][2][1] = 1;
-
-	cubeAxis[5][0][2] = -1;
-	cubeAxis[5][1][0] = 1;
-	cubeAxis[5][2][1] = 1;
+	param.outSize = 32;
+	if ( args.Argc() > 2 ) 
+		param.outSize = atoi( args.Argv( 2 ) );
+	param.samples = 1000;
+	if ( args.Argc() > 3 )
+		param.samples = atoi( args.Argv( 3 ) );
+	param.crutchUp = 1;
+	if ( args.Argc() > 4 )
+		param.crutchUp = atoi( args.Argv( 4 ) );
+	int	specular = 1;
+	if ( args.Argc() > 5 )
+		specular = atoi( args.Argv( 5 ) );
 
 	// read all of the images
 	for ( int i = 0 ; i < 6 ; i++ ) {
 		sprintf( fullname, "env/%s%s", baseName, cubeExtensions[i] );
 		common->Printf( "loading %s\n", fullname.c_str() );
 		session->UpdateScreen();
-		R_LoadImage( fullname, &buffers[i], &width, &height, NULL, true );
-		if ( !buffers[i] ) {
+		R_LoadImage( fullname, &param.buffers[i], &param.size, &param.size, NULL, true );
+		if ( !param.buffers[i] ) {
 			common->Printf( "failed.\n" );
 			for ( i-- ; i >= 0 ; i-- ) {
-				Mem_Free( buffers[i] );
+				Mem_Free( param.buffers[i] );
 			}
 			return;
 		}
 	}
 
-	// resample with hemispherical blending
-	int	samples = 1000;
+	extern void R_MakeAmbientMap( MakeAmbientMapParam& param );
 
-	byte	*outBuffer = (byte *)_alloca( outSize * outSize * 4 );
+	param.outBuffer = (byte*)R_StaticAlloc( 4 * param.outSize*param.outSize );
 
-	for ( int map = 0 ; map < 2 ; map++ ) {
-		for ( int i = 0 ; i < 6 ; i++ ) {
-			for ( int x = 0 ; x < outSize ; x++ ) {
-				for ( int y = 0 ; y < outSize ; y++ ) {
-					idVec3	dir;
-					float	total[3];
-
-					dir = cubeAxis[i][0] + -( -1 + 2.0*x/(outSize-1) ) * cubeAxis[i][1] + -( -1 + 2.0*y/(outSize-1) ) * cubeAxis[i][2];
-					dir.Normalize();
-					total[0] = total[1] = total[2] = 0;
-	//samples = 1;
-					float	limit = map ? 0.95 : 0.25;		// small for specular, almost hemisphere for ambient
-
-					for ( int s = 0 ; s < samples ; s++ ) {
-						// pick a random direction vector that is inside the unit sphere but not behind dir,
-						// which is a robust way to evenly sample a hemisphere
-						idVec3	test;
-						while( 1 ) {
-							for ( int j = 0 ; j < 3 ; j++ ) {
-								test[j] = -1 + 2 * (rand()&0x7fff)/(float)0x7fff;
-							}
-							if ( test.Length() > 1.0 ) {
-								continue;
-							}
-							test.Normalize();
-							if ( test * dir > limit ) {	// don't do a complete hemisphere
-								break;
-							}
-						}
-						byte	result[4];
-	//test = dir;
-						R_SampleCubeMap( test, width, buffers, result );
-						total[0] += result[0];
-						total[1] += result[1];
-						total[2] += result[2];
-					}
-					outBuffer[(y*outSize+x)*4+0] = total[0] / samples;
-					outBuffer[(y*outSize+x)*4+1] = total[1] / samples;
-					outBuffer[(y*outSize+x)*4+2] = total[2] / samples;
-					outBuffer[(y*outSize+x)*4+3] = 255;
-				}
-			}
-
-			if ( map == 0 ) {
-				sprintf( fullname, "env/%s_amb%s", baseName, cubeExtensions[i] );
-			} else {
-				sprintf( fullname, "env/%s_spec%s", baseName, cubeExtensions[i] );
-			}
-			common->Printf( "writing %s\n", fullname.c_str() );
+	for ( param.specular = false;; ) {
+		common->Printf( !param.specular ? "Ambient (1/2)\n" : "Specular (2/2)\n" );
+		session->UpdateScreen();
+		
+		for ( param.side = 0; param.side < 6; param.side++ ) {
+			sprintf( fullname, param.specular ? "env/%s_spec%s" : "env/%s_amb%s", baseName, cubeExtensions[param.side] );
+			common->Printf( "%d/6: %s\n", param.side + 1, fullname.c_str() );
 			session->UpdateScreen();
-			R_WriteTGA( fullname, outBuffer, outSize, outSize );
+
+			// resample with hemispherical blending
+			R_MakeAmbientMap( param );
+
+			common->Printf( "Writing out...\n" );
+			session->UpdateScreen();
+			R_WriteTGA( fullname, param.outBuffer, param.outSize, param.outSize );
 		}
+		if ( !param.specular && specular ) // TODO move to the loop operator above
+			param.specular = true;
+		else
+			break;
 	}
 
+	R_StaticFree( param.outBuffer );
 	for ( int f = 0 ; f < 6 ; f++ ) {
-		if ( buffers[f] ) {
-			Mem_Free( buffers[f] );
+		if ( param.buffers[f] ) {
+			Mem_Free( param.buffers[f] );
 		}
 	}
+	session->UpdateScreen();
 } 
 
 //============================================================================
-
 
 /*
 ===============
@@ -2008,9 +1862,8 @@ static void GfxInfo_f( const idCmdArgs &args ) {
 		common->Printf( "WGL_EXTENSIONS: %s\n", glConfig.wgl_extensions_string );
 	}
 	common->Printf( "GL_MAX_TEXTURE_SIZE: %d\n", glConfig.maxTextureSize );
-	common->Printf( "GL_MAX_TEXTURE_UNITS_ARB: %d\n", glConfig.maxTextureUnits );
+	common->Printf( "GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: %d\n", glConfig.maxTextures );
 	common->Printf( "GL_MAX_TEXTURE_COORDS_ARB: %d\n", glConfig.maxTextureCoords );
-	common->Printf( "GL_MAX_TEXTURE_IMAGE_UNITS_ARB: %d\n", glConfig.maxTextureImageUnits );
 	common->Printf( "\nPIXELFORMAT: color(%d-bits) Z(%d-bit) stencil(%d-bits)\n", glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits );
 	common->Printf( "MODE: %d, %d x %d %s hz:", r_mode.GetInteger(), glConfig.vidWidth, glConfig.vidHeight, fsstrings[r_fullscreen.GetBool()] );
 
@@ -2021,32 +1874,7 @@ static void GfxInfo_f( const idCmdArgs &args ) {
 	}
 	common->Printf( "CPU: %s\n", Sys_GetProcessorString() );
 
-	const char *active[2] = { "", " (ACTIVE)" };
-	/*common->Printf( "ARB path ENABLED%s\n", active[tr.backEndRenderer == BE_ARB] );
-
-	if ( glConfig.allowNV10Path ) {
-		common->Printf( "NV10 path ENABLED%s\n", active[tr.backEndRenderer == BE_NV10] );
-	} else {
-		common->Printf( "NV10 path disabled\n" );
-	}
-
-	if ( glConfig.allowNV20Path ) {
-		common->Printf( "NV20 path ENABLED%s\n", active[tr.backEndRenderer == BE_NV20] );
-	} else {
-		common->Printf( "NV20 path disabled\n" );
-	}
-
-	if ( glConfig.allowR200Path ) {
-		common->Printf( "R200 path ENABLED%s\n", active[tr.backEndRenderer == BE_R200] );
-	} else {
-		common->Printf( "R200 path disabled\n" );
-	}*/
-
-	if ( true/*glConfig.allowARB2Path*/ ) {
-		common->Printf( "ARB2 path ENABLED%s\n", active[true/*tr.backEndRenderer == BE_ARB2*/] );
-	} else {
-		common->Printf( "ARB2 path disabled\n" );
-	}
+	common->Printf( "ARB2 path ENABLED\n" );
 
 	//=============================
 
@@ -2075,12 +1903,6 @@ extern	PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
 	} else if ( !glConfig.twoSidedStencilAvailable ) {
 		common->Printf( "Two sided stencil not available\n" );
 	}
-
-	/*if ( vertexCache.IsFast() ) {
-		common->Printf( "Vertex cache is fast\n" );
-	} else {
-		common->Printf( "Vertex cache is SLOW\n" );
-	}*/
 }
 
 /*
@@ -2333,6 +2155,7 @@ void idRenderSystemLocal::Clear( void ) {
 	demoGuiModel = NULL;
 	memset( gammaTable, 0, sizeof( gammaTable ) );
 	takingScreenshot = false;
+	pbo = 0;
 }
 
 /*
@@ -2351,6 +2174,7 @@ void idRenderSystemLocal::Init( void ) {
 	ambientLightVector[1] = 0.5f - 0.385f;
 	ambientLightVector[2] = 0.8925f;
 	ambientLightVector[3] = 1.0f;
+	pbo = 0;
 
 	memset( &backEnd, 0, sizeof( backEnd ) );
 
@@ -2394,7 +2218,7 @@ idRenderSystemLocal::Shutdown
 */
 void idRenderSystemLocal::Shutdown( void ) {	
 	common->Printf( "idRenderSystem::Shutdown()\n" );
-
+    pbo = 0;
 	R_DoneFreeType( );
 
 	if ( glConfig.isInitialized ) {
