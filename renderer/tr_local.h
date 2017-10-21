@@ -447,6 +447,7 @@ typedef struct viewDef_s {
 	// crossing a closed door.  This is used to avoid drawing interactions
 	// when the light is behind a closed door.
 
+	bool				IsLightGem() const { return renderView.viewID < 0; }
 } viewDef_t;
 
 
@@ -566,9 +567,9 @@ extern	frameData_t *backendFrameData;
 
 //=======================================================================
 
-void R_LockSurfaceScene( viewDef_t *parms );
+void R_LockSurfaceScene( viewDef_t &parms );
 void R_ClearCommandChain( frameData_t *frameData );
-void R_AddDrawViewCmd( viewDef_t *parms );
+void R_AddDrawViewCmd( viewDef_t &parms );
 
 void R_ReloadGuis_f( const idCmdArgs &args );
 void R_ListGuis_f( const idCmdArgs &args );
@@ -614,7 +615,6 @@ typedef struct {
 
 typedef struct {
 	int		current2DMap;
-	int		current3DMap;
 	int		currentCubeMap;
 	textureType_t	textureType;
 } tmu_t;
@@ -764,7 +764,7 @@ public:
 
 	void					Clear( void );
 	//void					SetBackEndRenderer();			// sets tr.backEndRenderer based on cvars
-	void					RenderViewToViewport( const renderView_t *renderView, idScreenRect *viewport );
+	void					RenderViewToViewport( const renderView_t &renderView, idScreenRect &viewport );
 
 public:
 	// renderer globals
@@ -813,7 +813,7 @@ public:
 	viewEntity_t			identitySpace;		// can use if we don't know viewDef->worldSpace is valid
 	FILE *					logFile;			// for logging GL calls and frame breaks
 
-	int						stencilIncr, stencilDecr;	// GL_INCR / INCR_WRAP_EXT, GL_DECR / GL_DECR_EXT
+	int						stencilIncr, stencilDecr;	// GL_INCR / INCR_WRAP_EXT, GL_DECR / GL_DECR_WRAP_EXT
 
 	renderCrop_t			renderCrops[MAX_RENDER_CROPS];
 	int						currentRenderCrop;
@@ -849,6 +849,7 @@ extern idCVar r_znear;					// near Z clip plane
 extern idCVar r_finish;					// force a call to glFinish() every frame
 extern idCVar r_frontBuffer;			// draw to front buffer for debugging
 extern idCVar r_swapInterval;			// changes wglSwapIntarval
+extern idCVar r_swapIntervalTemp;		// force VSync in GUI
 extern idCVar r_offsetFactor;			// polygon offset parameter
 extern idCVar r_offsetUnits;			// polygon offset parameter
 extern idCVar r_singleTriangle;			// only draw a single triangle per primitive
@@ -912,6 +913,8 @@ extern idCVar r_skipAmbient;			// bypasses all non-interaction drawing
 extern idCVar r_skipNewAmbient;			// bypasses all vertex/fragment program ambients
 extern idCVar r_skipBlendLights;		// skip all blend lights
 extern idCVar r_skipFogLights;			// skip all fog lights
+// extern idCVar r_skipParallelLights;	// skip all parallel lights
+// extern idCVar r_skipProjectedLights;	// skip all projected lights
 extern idCVar r_skipSubviews;			// 1 = don't render any mirrors / cameras / etc
 extern idCVar r_skipGuiShaders;			// 1 = don't render any gui elements on surfaces
 extern idCVar r_skipParticles;			// 1 = don't render any particles
@@ -1006,8 +1009,11 @@ extern idCVar r_debugRenderToTexture;
 // rebb: dedicated ambient
 extern idCVar r_dedicatedAmbient;
 
-extern idCVar r_softShadows; //~SS
-/*extern idCVar r_softShadDebug;
+extern idCVar r_softShadowsQuality;
+extern idCVar r_softShadowsRadius;
+
+/*extern idCVar r_softShadows; //~SS
+extern idCVar r_softShadDebug;
 extern idCVar r_softShadMaxSize; */
 
 // duzenko: late 2016-17 additions
@@ -1187,7 +1193,7 @@ MAIN
 ====================================================================
 */
 
-void R_RenderView( viewDef_t *parms );
+void R_RenderView( viewDef_t &parms );
 
 // performs radius cull first, then corner cull
 bool R_CullLocalBox( const idBounds &bounds, const float modelMatrix[16], int numPlanes, const idPlane *planes );
@@ -1214,7 +1220,7 @@ void R_TransformClipToDevice( const idPlane &clip, const viewDef_t *view, idVec3
 
 void R_TransposeGLMatrix( const float in[16], float out[16] );
 
-void R_SetViewMatrix( viewDef_t *viewDef );
+void R_SetViewMatrix( viewDef_t &viewDef );
 
 void myGlMultMatrix( const float *a, const float *b, float *out );
 
@@ -1361,7 +1367,6 @@ void	R_ReloadARBPrograms_f( const idCmdArgs &args );
 int		R_FindARBProgram( GLenum target, const char *program );
 
 void	R_ReloadGLSLPrograms_f( const idCmdArgs &args );
-void	RB_GLSL_DrawInteractions( void );
 
 typedef enum {
 	PROG_INVALID,

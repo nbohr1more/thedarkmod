@@ -822,7 +822,7 @@ void idGameEdit::ParseSpawnArgsToRenderEntity( const idDict *args, renderEntity_
 	renderEntity->noDynamicInteractions = args->GetBool( "noDynamicInteractions" );
 	
 	// nbohr1more: #4379 lightgem culling
-	renderEntity->islightgem = args->GetBool( "islightgem" );
+	renderEntity->isLightgem = args->GetBool( "islightgem" );
 
 	// check noshadows flag
 	renderEntity->noShadow = args->GetBool( "noshadows" );
@@ -4224,36 +4224,47 @@ void idEntity::Present(void)
 	}
 */
 
-	if(!gameLocal.isNewFrame )
+	if ( !gameLocal.isNewFrame )
+	{
 		return;
+	}
 
-	if( m_bFrobable )
+	if ( m_bFrobable )
 	{
 		UpdateFrobState();
 		UpdateFrobDisplay();
 	}
 
 	// don't present to the renderer if the entity hasn't changed
-	if(!(thinkFlags & TH_UPDATEVISUALS))
+	if ( !(thinkFlags & TH_UPDATEVISUALS) )
+	{
 		return;
+	}
 
-	if( !m_bFrobable )
+	if ( !m_bFrobable && !cameraTarget ) // grayman #4615
 	{
 		BecomeInactive( TH_UPDATEVISUALS );
 	}
 
 	// camera target for remote render views
-	if(cameraTarget && gameLocal.InPlayerPVS(this))
+	if ( cameraTarget && gameLocal.InPlayerPVS(this) )
+	{
 		renderEntity.remoteRenderView = cameraTarget->GetRenderView();
+	}
 
 	// if set to invisible, skip
-	if(!renderEntity.hModel || IsHidden())
+	if ( !renderEntity.hModel || IsHidden() )
+	{
 		return;
+	}
 
 	// add to refresh list
-	if ( modelDefHandle == -1 ) {
+	if ( modelDefHandle == -1 )
+	{
 		modelDefHandle = gameRenderWorld->AddEntityDef( &renderEntity );
-	} else {
+	}
+	else
+	{
 		gameRenderWorld->UpdateEntityDef( modelDefHandle, &renderEntity );
 	}
 

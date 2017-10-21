@@ -144,7 +144,7 @@ void LightGem::InitializeLightGemEntity( void )
 	m_LightgemSurface.GetEntity()->GetRenderEntity()->noShadow = true;
 	m_LightgemSurface.GetEntity()->GetRenderEntity()->noSelfShadow = true;
 	//nbohr1more: #4379 lightgem culling
-	m_LightgemSurface.GetEntity()->GetRenderEntity()->islightgem = true;
+	m_LightgemSurface.GetEntity()->GetRenderEntity()->isLightgem = true;
 
 	DM_LOG(LC_LIGHT, LT_INFO)LOGSTRING("LightgemSurface: [%08lX]\r", m_LightgemSurface.GetEntity());
 }
@@ -176,7 +176,7 @@ void LightGem::Restore( idRestoreGame & a_savedGame )
 	m_LightgemSurface.GetEntity()->GetRenderEntity()->noShadow = true;
 	m_LightgemSurface.GetEntity()->GetRenderEntity()->noSelfShadow = true;
 	//nbohr1more: #4379 lightgem culling
-	m_LightgemSurface.GetEntity()->GetRenderEntity()->islightgem = true;
+	m_LightgemSurface.GetEntity()->GetRenderEntity()->isLightgem = true;
 
 	DM_LOG(LC_LIGHT, LT_INFO)LOGSTRING("LightgemSurface: [%08lX]\r", m_LightgemSurface.GetEntity());
 }
@@ -307,7 +307,7 @@ float LightGem::Calculate(idPlayer *player)
 			PROFILE_BLOCK_START	( LightGem_Calculate_ForLoop_RenderScene );
 			
 			gameRenderWorld->SetRenderView(&m_Lightgem_rv); // most likely not needed
-			gameRenderWorld->RenderScene(&m_Lightgem_rv);
+			gameRenderWorld->RenderScene(m_Lightgem_rv);
 			
 			PROFILE_BLOCK_END	( LightGem_Calculate_ForLoop_RenderScene );
 

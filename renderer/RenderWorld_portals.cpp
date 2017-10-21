@@ -726,7 +726,7 @@ void idRenderWorldLocal::AddAreaEntityRefs( int areaNum, const portalStack_t *ps
 		// check for completely suppressing the model
 		if ( !r_skipSuppress.GetBool() ) {
 		    // nbohr1more: #4379 lightgem culling
-		    if ( (!entity->parms.islightgem) && (entity->parms.noShadow) && (tr.viewDef->renderView.viewID == RENDERTOOLS_SKIP_ID )){
+		    if ( (!entity->parms.isLightgem) && (entity->parms.noShadow) && (tr.viewDef->renderView.viewID == RENDERTOOLS_SKIP_ID )){
 			    continue;
 			}
 			if ( entity->parms.suppressSurfaceInViewID
@@ -844,7 +844,6 @@ bool idRenderWorldLocal::CullLightByPortals( const idRenderLightLocal *light, co
 		const srfTriangles_t	*tri;
 		float			d;
 		idFixedWinding	w;		// we won't overflow because MAX_PORTAL_PLANES = 20
-#define INSIDE_LIGHT_FRUSTUM_SLOP			32
 
 		if (r_useLightCulling.GetInteger() == 0) {
 			return false;
@@ -858,11 +857,6 @@ bool idRenderWorldLocal::CullLightByPortals( const idRenderLightLocal *light, co
 				// side will be the "back" faces of the light, which must have
 				// some fragment inside the portalStack to be visible
 				if (light->frustum[i].Distance(tr.viewDef->renderView.vieworg) >= 0) {
-					continue;
-				}
-
-				if ((light->frustum[i].Distance(tr.viewDef->renderView.vieworg) > INSIDE_LIGHT_FRUSTUM_SLOP) && (tr.viewDef->renderView.viewID == RENDERTOOLS_SKIP_ID))
-				{
 					continue;
 				}
 

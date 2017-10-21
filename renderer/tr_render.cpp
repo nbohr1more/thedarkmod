@@ -66,7 +66,7 @@ RB_DrawElementsWithCounters
 ================
 */
 void RB_DrawElementsWithCounters( const srfTriangles_t *tri ) {
-	if (r_showPrimitives.GetBool() && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID) {
+	if (r_showPrimitives.GetBool() && !backEnd.viewDef->IsLightGem() ) {
 		backEnd.pc.c_drawElements++;
 		backEnd.pc.c_drawIndexes += tri->numIndexes;
 		backEnd.pc.c_drawVertexes += tri->numVerts;
@@ -82,7 +82,7 @@ void RB_DrawElementsWithCounters( const srfTriangles_t *tri ) {
 						tri->numIndexes,
 						GL_INDEX_TYPE,
 						vertexCache.Position( tri->indexCache ) ); // This should cast later anyway, no need to do it twice
-		if (r_showPrimitives.GetBool() && backEnd.viewDef->renderView.viewID >= TR_SCREEN_VIEW_ID) 
+		if (r_showPrimitives.GetBool() && !backEnd.viewDef->IsLightGem() ) 
 			backEnd.pc.c_vboIndexes += tri->numIndexes;
 	} else {
 		if ( r_useIndexBuffers.GetBool() ) {
@@ -285,37 +285,35 @@ void RB_RenderDrawSurfChainWithFunction( const drawSurf_t *drawSurfs,
 	for ( drawSurf = drawSurfs ; drawSurf ; drawSurf = drawSurf->nextOnLight ) {
 		// change the matrix if needed
 		// Note (Serp) : this used to be ( drawSurf->space != backEnd.currentSpace) however, since it's always going to be NULL...
-		if ( drawSurf->space ) {
+		if ( drawSurf->space ) 
 			qglLoadMatrixf( drawSurf->space->modelViewMatrix );
-		} else {
+		else
 			return;
-		}
-
-		if ( drawSurf->space->weaponDepthHack ) {
-			RB_EnterWeaponDepthHack();
-		}
-
-		if ( drawSurf->space->modelDepthHack ) {
-			RB_EnterModelDepthHack( drawSurf->space->modelDepthHack );
-		}
 
 		// change the scissor if needed
 		if ( r_useScissor.GetBool() && !backEnd.currentScissor.Equals( drawSurf->scissorRect ) ) {
-			if (drawSurf->scissorRect.x2 >= 0 && drawSurf->scissorRect.y2 >= 0) { // duzenko: FIXME find out why they are negative sometimes
+			const idScreenRect &r = drawSurf->scissorRect;
+			if ( r.x1 <= r.x2 && r.y1 <= r.y2 ) { // duzenko: FIXME find out why they are negative sometimes
 				backEnd.currentScissor = drawSurf->scissorRect;
-				qglScissor(backEnd.viewDef->viewport.x1 + backEnd.currentScissor.x1,
+				qglScissor( backEnd.viewDef->viewport.x1 + backEnd.currentScissor.x1,
 					backEnd.viewDef->viewport.y1 + backEnd.currentScissor.y1,
 					backEnd.currentScissor.x2 + 1 - backEnd.currentScissor.x1,
-					backEnd.currentScissor.y2 + 1 - backEnd.currentScissor.y1);
-			}
+					backEnd.currentScissor.y2 + 1 - backEnd.currentScissor.y1 );
+			} else
+				continue; // duzenko: why bother
 		}
+
+		if ( drawSurf->space->weaponDepthHack ) 
+			RB_EnterWeaponDepthHack();
+
+		if ( drawSurf->space->modelDepthHack ) 
+			RB_EnterModelDepthHack( drawSurf->space->modelDepthHack );
 
 		// render it
 		triFunc_( drawSurf );
 
-		if ( drawSurf->space->weaponDepthHack || drawSurf->space->modelDepthHack ) {
+		if ( drawSurf->space->weaponDepthHack || drawSurf->space->modelDepthHack ) 
 			RB_LeaveDepthHack();
-		}
 
 		backEnd.currentSpace = drawSurf->space;
 	}
@@ -477,7 +475,6 @@ void RB_BeginDrawingView (void) {
 
 	backEnd.glState.faceCulling = -1;		// force face culling to set next time
 	GL_Cull( CT_FRONT_SIDED );
-
 }
 
 /*
@@ -641,9 +638,14 @@ void RB_CreateSingleDrawInteractions( const drawSurf_t *surf
 	const bool useLightDepthBounds = r_useDepthBoundsTest.GetBool();
 	//anon end
 
-	if (!surf->backendGeo || !surf->backendGeo->ambientCache || r_skipInteractions.GetBool()) {
+	if (!surf->backendGeo || !surf->backendGeo->ambientCache) 
 		return;
-	}
+	if ( vLight->lightShader->IsAmbientLight() ) {
+		if ( r_skipAmbient.GetInteger() == 2 )
+			return;
+	} else
+		if ( r_skipInteractions.GetBool() )
+			return;
 
 	if ( tr.logFile ) {
 		RB_LogComment( "---------- RB_CreateSingleDrawInteractions %s on %s ----------\n", lightShader->GetName(), surfaceShader->GetName() );

@@ -135,7 +135,7 @@ typedef struct renderEntity_s {
 													// the level load is completed.  This is a performance hack
 													// for the gigantic outdoor meshes in the monorail map, so
 													// all the lights in the moving monorail don't touch the meshes
-    bool                    islightgem;             //nbohr1more: #4379 lightgem culling
+    bool                    isLightgem;             //nbohr1more: #4379 lightgem culling
 
 	bool					weaponDepthHack;		// squash depth range so view weapons don't poke into walls
 													// this automatically implies noShadow
@@ -314,7 +314,7 @@ public:
 	// rendering a scene may actually render multiple subviews for mirrors and portals, and
 	// may render composite textures for gui console screens and light projections
 	// It would also be acceptable to render a scene multiple times, for "rear view mirrors", etc
-	virtual void			RenderScene( const renderView_t *renderView ) = 0;
+	virtual void			RenderScene( const renderView_t &renderView ) = 0;
 
 	//-------------- Portal Area Information -----------------
 
@@ -359,11 +359,13 @@ public:
 
 	//-------------- Tracing  -----------------
 
+#if 0
 	// Checks a ray trace against any gui surfaces in an entity, returning the
 	// fraction location of the trace on the gui surface, or -1,-1 if no hit.
 	// This doesn't do any occlusion testing, simply ignoring non-gui surfaces.
 	// start / end are in global world coordinates.
 	virtual guiPoint_t		GuiTrace( qhandle_t entityHandle, const idVec3 start, const idVec3 end ) const = 0;
+#endif
 
 	// Traces vs the render model, possibly instantiating a dynamic version, and returns true if something was hit
 	virtual bool			ModelTrace( modelTrace_t &trace, qhandle_t entityHandle, const idVec3 &start, const idVec3 &end, const float radius ) const = 0;

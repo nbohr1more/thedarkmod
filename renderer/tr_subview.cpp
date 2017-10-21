@@ -277,7 +277,6 @@ R_RemoteRender
 ===============
 */
 static void R_RemoteRender( drawSurf_t *surf, textureStage_t *stage ) {
-	viewDef_t		*parms;
 
 	// remote views can be reused in a single frame
 	if ( stage->dynamicFrameCount == tr.frameCount ) 
@@ -288,7 +287,7 @@ static void R_RemoteRender( drawSurf_t *surf, textureStage_t *stage ) {
 		return;
 
 	// copy the viewport size from the original
-	parms = (viewDef_t *)R_FrameAlloc( sizeof( *parms ) );
+	viewDef_t* parms = (viewDef_t *)R_FrameAlloc( sizeof( *parms ) );
 	*parms = *tr.viewDef;
 
 	parms->isSubview = true;
@@ -298,14 +297,14 @@ static void R_RemoteRender( drawSurf_t *surf, textureStage_t *stage ) {
 	parms->renderView.viewID = 0;	// clear to allow player bodies to show up, and suppress view weapons
 	parms->initialViewAreaOrigin = parms->renderView.vieworg;
 
-	tr.CropRenderSize( stage->width, stage->height, true );
+	tr.CropRenderSize( stage->width, stage->height );
 
 	parms->renderView.x = 0;
 	parms->renderView.y = 0;
 	parms->renderView.width = SCREEN_WIDTH;
 	parms->renderView.height = SCREEN_HEIGHT;
 
-	tr.RenderViewToViewport( &parms->renderView, &parms->viewport );
+	tr.RenderViewToViewport( parms->renderView, parms->viewport );
 
 	parms->scissor.x1 = 0;
 	parms->scissor.y1 = 0;
@@ -316,7 +315,7 @@ static void R_RemoteRender( drawSurf_t *surf, textureStage_t *stage ) {
 	parms->subviewSurface = surf;
 
 	// generate render commands for it
-	R_RenderView(parms);
+	R_RenderView(*parms);
 
 	// copy this rendering to the image
 	stage->dynamicFrameCount = tr.frameCount;
@@ -332,8 +331,11 @@ static void R_RemoteRender( drawSurf_t *surf, textureStage_t *stage ) {
 R_MirrorRender
 =================
 */
-void R_MirrorRender( drawSurf_t *surf, textureStage_t *stage, idScreenRect scissor ) {
+void R_MirrorRender( drawSurf_t *surf, textureStage_t *stage, idScreenRect& scissor ) {
 	viewDef_t		*parms;
+
+	if ( tr.viewDef->isSubview ) // #4615 HOM effect - only draw mirror from player's view
+		return;
 
 	// remote views can be reused in a single frame
 	if ( stage->dynamicFrameCount == tr.frameCount ) {
@@ -346,7 +348,143 @@ void R_MirrorRender( drawSurf_t *surf, textureStage_t *stage, idScreenRect sciss
 		return;
 	}
 
-	tr.CropRenderSize( stage->width, stage->height, true );
+	//tr.CropRenderSize( stage->width, stage->height, true, true );
+
+	parms->renderView.x = 0;
+	parms->renderView.y = 0;
+	parms->renderView.width = SCREEN_WIDTH;
+	parms->renderView.height = SCREEN_HEIGHT;
+
+	tr.RenderViewToViewport( parms->renderView, parms->viewport );
+
+	parms->scissor = scissor;
+
+	parms->superView = tr.viewDef;
+	parms->subviewSurface = surf;
+
+	// triangle culling order changes with mirroring
+	parms->isMirror = (((int)parms->isMirror ^ (int)tr.viewDef->isMirror) != 0);
+
+	// generate render commands for it
+	R_RenderView( *parms );
+
+	// copy this rendering to the image
+	stage->dynamicFrameCount = tr.frameCount;
+	if ( !stage->image )
+		stage->image = globalImages->scratchImage;
+
+	tr.CaptureRenderToImage( stage->image->imgName );
+	//tr.UnCrop();
+}
+
+/*
+=================
+R_PortalRender
+duzenko: copy pasted from idPlayerView::SingleView
+=================
+*/
+void R_PortalRender( drawSurf_t *surf, textureStage_t *stage, idScreenRect& scissor ) {
+	viewDef_t		*parms;
+	parms = (viewDef_t *)R_FrameAlloc( sizeof( *parms ) );
+	*parms = *tr.primaryView;
+	parms->renderView.viewID = 0;
+	parms->numClipPlanes = 0;
+
+	parms->renderView.viewaxis = parms->renderView.viewaxis * gameLocal.GetLocalPlayer()->playerView.ShakeAxis();
+
+	// grayman #3108 - contributed by neuro & 7318
+	idVec3 diff, currentEyePos, PSOrigin, Zero;
+
+	Zero.Zero();
+
+	if ( (gameLocal.CheckGlobalPortalSky()) || (gameLocal.GetCurrentPortalSkyType() == PORTALSKY_LOCAL) ) {
+		// in a case of a moving portalSky
+
+		currentEyePos = parms->renderView.vieworg;
+
+		if ( gameLocal.playerOldEyePos == Zero ) {
+			// Initialize playerOldEyePos. This will only happen in one tick.
+			gameLocal.playerOldEyePos = currentEyePos;
+		}
+
+		diff = (currentEyePos - gameLocal.playerOldEyePos) / gameLocal.portalSkyScale;
+		gameLocal.portalSkyGlobalOrigin += diff; // This is for the global portalSky.
+		// It should keep going even when not active.
+	}
+
+	//if ( gameLocal.portalSkyEnt.GetEntity() && gameLocal.IsPortalSkyActive() && g_enablePortalSky.GetInteger() ) {
+
+		if ( gameLocal.GetCurrentPortalSkyType() == PORTALSKY_STANDARD ) {
+			PSOrigin = gameLocal.portalSkyOrigin;
+		}
+
+		if ( gameLocal.GetCurrentPortalSkyType() == PORTALSKY_GLOBAL ) {
+			PSOrigin = gameLocal.portalSkyGlobalOrigin;
+		}
+
+		if ( gameLocal.GetCurrentPortalSkyType() == PORTALSKY_LOCAL ) {
+			gameLocal.portalSkyOrigin += diff;
+			PSOrigin = gameLocal.portalSkyOrigin;
+		}
+
+		gameLocal.playerOldEyePos = currentEyePos;
+		// end neuro & 7318
+
+		parms->renderView.vieworg = PSOrigin;	// grayman #3108 - contributed by neuro & 7318
+		parms->renderView.viewaxis = tr.viewDef->renderView.viewaxis * gameLocal.portalSkyEnt.GetEntity()->GetPhysics()->GetAxis();
+
+		// set up viewport, adjusted for resolution and OpenGL style 0 at the bottom
+		tr.RenderViewToViewport( parms->renderView, parms->viewport );
+
+		parms->scissor.x1 = 0;
+		parms->scissor.y1 = 0;
+		parms->scissor.x2 = parms->viewport.x2 - parms->viewport.x1;
+		parms->scissor.y2 = parms->viewport.y2 - parms->viewport.y1;
+
+
+		parms->isSubview = true;
+		parms->initialViewAreaOrigin = parms->renderView.vieworg;
+		parms->floatTime = parms->renderView.time * 0.001f;
+
+		tr.frameShaderTime = parms->floatTime;
+
+		idVec3	cross;
+		cross = parms->renderView.viewaxis[1].Cross( parms->renderView.viewaxis[2] );
+		if ( cross * parms->renderView.viewaxis[0] > 0 ) {
+			parms->isMirror = false;
+		} else {
+			parms->isMirror = true;
+		}
+
+		R_RenderView( *parms );
+
+		//if ( g_enablePortalSky.GetInteger() == 1 ) // duzenko #4414 - the new method will use the left-over pixels in framebuffer
+		//	renderSystem->CaptureRenderToImage( "_currentRender" );
+
+		//hackedView.forceUpdate = true;				// FIX: for smoke particles not drawing when portalSky present
+	/*} else // grayman #3108 - contributed by 7318 
+	{
+		// So if g_enablePortalSky is disabled, GlobalPortalSkies doesn't break.
+		// When g_enablePortalSky gets re-enabled, GlobalPortalSkies keeps working. 
+		gameLocal.playerOldEyePos = currentEyePos;
+	}*/
+
+	//hackedView.forceUpdate = true; // Fix for lightgem problems? -Gildoran
+	
+	/*viewDef_t		*parms;
+
+	// remote views can be reused in a single frame
+	if ( stage->dynamicFrameCount == tr.frameCount ) {
+		return;
+	}
+
+	// issue a new view command
+	parms = R_MirrorViewBySurface( surf );
+	if ( !parms ) {
+		return;
+	}
+
+	//tr.CropRenderSize( stage->width, stage->height, true, true );
 
 	parms->renderView.x = 0;
 	parms->renderView.y = 0;
@@ -355,26 +493,28 @@ void R_MirrorRender( drawSurf_t *surf, textureStage_t *stage, idScreenRect sciss
 
 	tr.RenderViewToViewport( &parms->renderView, &parms->viewport );
 
-	parms->scissor.x1 = 0;
-	parms->scissor.y1 = 0;
-	parms->scissor.x2 = parms->viewport.x2 - parms->viewport.x1;
-	parms->scissor.y2 = parms->viewport.y2 - parms->viewport.y1;
+	parms->scissor = scissor;
 
 	parms->superView = tr.viewDef;
 	parms->subviewSurface = surf;
 
 	// triangle culling order changes with mirroring
-	parms->isMirror = ( ( (int)parms->isMirror ^ (int)tr.viewDef->isMirror ) != 0 );
+	parms->isMirror = (((int)parms->isMirror ^ (int)tr.viewDef->isMirror) != 0);
 
 	// generate render commands for it
 	R_RenderView( parms );
 
 	// copy this rendering to the image
 	stage->dynamicFrameCount = tr.frameCount;
-	stage->image = globalImages->scratchImage;
-
-	tr.CaptureRenderToImage( stage->image->imgName );
-	tr.UnCrop();
+	tr.UnCrop();*/
+	if ( g_enablePortalSky.GetInteger() == 1 ) {
+		idImage *image = NULL;
+		if ( stage )
+			image = stage->image;
+		if ( !image )
+			image = globalImages->currentRenderImage;
+		tr.CaptureRenderToImage( image->imgName );
+	}
 }
 
 /*
@@ -403,7 +543,7 @@ void R_XrayRender( drawSurf_t *surf, textureStage_t *stage, idScreenRect scissor
 	parms->renderView.width = SCREEN_WIDTH;
 	parms->renderView.height = SCREEN_HEIGHT;
 
-	tr.RenderViewToViewport( &parms->renderView, &parms->viewport );
+	tr.RenderViewToViewport( parms->renderView, parms->viewport );
 
 	parms->scissor.x1 = 0;
 	parms->scissor.y1 = 0;
@@ -417,7 +557,7 @@ void R_XrayRender( drawSurf_t *surf, textureStage_t *stage, idScreenRect scissor
 	parms->isMirror = ( ( (int)parms->isMirror ^ (int)tr.viewDef->isMirror ) != 0 );
 
 	// generate render commands for it
-	R_RenderView( parms );
+	R_RenderView( *parms );
 
 	// copy this rendering to the image
 	stage->dynamicFrameCount = tr.frameCount;
@@ -438,13 +578,11 @@ bool	R_GenerateSurfaceSubview( drawSurf_t *drawSurf ) {
 	const idMaterial		*shader;
 
 	// for testing the performance hit
-	if ( r_skipSubviews.GetBool() ) {
+	if ( r_skipSubviews.GetBool() ) 
 		return false;
-	}
 
-	if ( R_PreciseCullSurface( drawSurf, ndcBounds ) ) {
+	if ( R_PreciseCullSurface( drawSurf, ndcBounds ) ) 
 		return false;
-	}
 
 	shader = drawSurf->material;
 
@@ -457,9 +595,8 @@ bool	R_GenerateSurfaceSubview( drawSurf_t *drawSurf ) {
 			break;
 		}
 	}
-	if ( parms ) {
+	if ( parms ) 
 		return false;
-	}
 
 	// crop the scissor bounds based on the precise cull
 	idScreenRect	scissor;
@@ -492,13 +629,16 @@ bool	R_GenerateSurfaceSubview( drawSurf_t *drawSurf ) {
 			case DI_XRAY_RENDER:
 				R_XrayRender( drawSurf, const_cast<textureStage_t *>(&stage->texture), scissor );
 				break;
+			case DI_PORTAL_RENDER:
+				// R_PortalRender( drawSurf, const_cast<textureStage_t *>(&stage->texture), scissor );
+				break;
 			}
 		}
 		return true;
 	//}
 
 	// issue a new view command
-	parms = R_MirrorViewBySurface( drawSurf );
+	/*parms = R_MirrorViewBySurface( drawSurf );
 	if ( !parms ) 
 		return false;
 
@@ -512,7 +652,7 @@ bool	R_GenerateSurfaceSubview( drawSurf_t *drawSurf ) {
 	// generate render commands for it
 	R_RenderView( parms );
 
-	return true;
+	return true;*/
 }
 
 /*
@@ -528,15 +668,14 @@ would change tr.viewCount.
 ================
 */
 bool R_GenerateSubViews( void ) {
-	drawSurf_t		*drawSurf;
+	drawSurf_t *drawSurf, *skySurf = NULL;
 	int				i;
 	bool			subviews;
 	const idMaterial		*shader;
 
 	// for testing the performance hit
-	if ( r_skipSubviews.GetBool() ) {
+	if ( r_skipSubviews.GetBool() ) 
 		return false;
-	}
 
 	// duzenko #4420: no mirrors on lightgem stage
 	if (tr.viewDef->renderView.viewID == RENDERTOOLS_SKIP_ID) // DARKMOD_LG_VIEWID ?
@@ -546,15 +685,32 @@ bool R_GenerateSubViews( void ) {
 
 	// scan the surfaces until we either find a subview, or determine
 	// there are no more subview surfaces.
-	for ( i = 0 ; i < tr.viewDef->numDrawSurfs ; i++ ) {
+	for ( i = 0; i < tr.viewDef->numDrawSurfs; i++ ) {
 		drawSurf = tr.viewDef->drawSurfs[i];
 		shader = drawSurf->material;
 
-		if ( !shader || !shader->HasSubview() ) 
+		if ( !shader || !shader->HasSubview() )
 			continue;
 
-		if ( R_GenerateSurfaceSubview( drawSurf ) ) 
+		if ( R_GenerateSurfaceSubview( drawSurf ) ) {
 			subviews = true;
+			if ( shader->GetSort() == SS_PORTAL_SKY ) // portal sky needs to be the last one, and only once
+				skySurf = drawSurf;
+		}
+	}
+
+	static bool dontReenter = false;
+	if ( !dontReenter && gameLocal.portalSkyEnt.GetEntity() && gameLocal.IsPortalSkyActive() && g_enablePortalSky.GetBool() ) {
+		dontReenter = true;
+		if ( skySurf ) { // textures/smf/portal_sky
+			idScreenRect sc;
+			R_PortalRender( skySurf, NULL, sc );
+		} else { // caulk 
+			idScreenRect sc;
+			R_PortalRender( NULL, NULL, sc );
+			subviews = true;
+		}
+		dontReenter = false;
 	}
 
 	return subviews;

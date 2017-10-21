@@ -219,6 +219,8 @@ idCVar cv_tdm_crouch_toggle(			"tdm_toggle_crouch",			"1",			CVAR_GAME | CVAR_AR
 idCVar cv_tdm_crouch_toggle_hold_time(	"tdm_crouch_toggle_hold_time",	"400",			CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "The time in milliseconds to hold crouch while on a rope/ladder for starting to slide down." );
 idCVar cv_tdm_reattach_delay(			"tdm_reattach_delay",			"100",			CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "Delay (in ms) for reattaching to ropes/ladders after detaching using crouch." );
 
+// nbohr1more: #558 Toggle Creep
+idCVar cv_tdm_creep_toggle(			    "tdm_toggle_creep",			"0",			CVAR_GAME | CVAR_BOOL, "Set to 1 to make creep toggleable." );
 
 /**
 * Dark Mod Leaning
@@ -335,6 +337,15 @@ idCVar cv_tdm_inv_use_on_frob("tdm_inv_use_on_frob", "1",	CVAR_GAME | CVAR_ARCHI
 idCVar cv_tdm_door_control("tdm_door_control", "0",			CVAR_GAME | CVAR_ARCHIVE | CVAR_BOOL, "Acivates experimental door control.  When active, hold down frob and move mouse to fine-control a door.");
 idCVar cv_tdm_door_control_sensitivity( "tdm_door_control_sensitivity", "0.01", CVAR_GAME | CVAR_FLOAT, "Sets fine door control mouse sensitivity." );
 idCVar cv_tdm_inv_use_visual_feedback("tdm_inv_use_visual_feedback", "1",	CVAR_GAME | CVAR_ARCHIVE | CVAR_BOOL, "When set to '1' the HUD is giving visual feedback when the currently selected item is used on the highlighted one.");
+
+//Obsttorte: cvars to allow altering the gui size
+
+idCVar 	cv_gui_iconSize("gui_iconSize", "1.0", CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "Specifies the size of the icons used by the hud");
+idCVar 	cv_gui_smallTextSize("gui_smallTextSize", "1.0", CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "Specifies the text size used for inventory and weapons");
+idCVar  cv_gui_bigTextSize("gui_bigTextSize", "1.0", CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "Specifies the text size of ingame notifications ");
+idCVar 	cv_gui_lightgemSize("gui_lightgemSize", "1.0", CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "Specifies the size of the lightgem");
+idCVar 	cv_gui_barSize("gui_barSize", "1.0", CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "Specifies the size of the health and breath bar");
+idCVar	cv_gui_objectiveTextSize("gui_objectiveTextSize", "1.0", CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "Specifies the size of the objectives text");
 
 idCVar cv_tdm_rope_pull_force_factor("tdm_rope_pull_force_factor", "140", CVAR_GAME | CVAR_ARCHIVE | CVAR_FLOAT, "The factor by which the pulling force when jumping on a rope gets multiplied.");
 

@@ -94,7 +94,7 @@ void idMaterial::CommonInit() {
 	noFog = false;
 	hasSubview = false;
 	allowOverlays = true;
-	islightgemsurf = false; //nbohr1more: #4379 lightgem culling
+	isLightgemSurf = false; //nbohr1more: #4379 lightgem culling
 	unsmoothedTangents = false;
 	gui = NULL;
 	memset( deformRegisters, 0, sizeof( deformRegisters ) );
@@ -1133,17 +1133,23 @@ void idMaterial::ParseStage( idLexer &src, const textureRepeat_t trpDefault ) {
 			continue;
 		}
 
-		else if (  !token.Icmp( "remoteRenderMap" ) ) {
+		else if ( !token.Icmp( "remoteRenderMap" ) ) {
 			ts->dynamic = DI_REMOTE_RENDER;
 			ts->width = src.ParseInt();
 			ts->height = src.ParseInt();
 			continue;
 		}
 
-		else if (  !token.Icmp( "mirrorRenderMap" ) ) {
+		else if ( !token.Icmp( "portalRenderMap" ) ) {
+			ts->dynamic = DI_PORTAL_RENDER;
+			continue;
+		}
+
+		else if ( !token.Icmp( "mirrorRenderMap" ) ) {
 			ts->dynamic = DI_MIRROR_RENDER;
-			ts->width = src.ParseInt();
-			ts->height = src.ParseInt();
+			//ts->width = src.ParseInt();
+			//ts->height = src.ParseInt();
+			src.SkipRestOfLine();
 			ts->texgen = TG_SCREEN;
 			continue;
 		}
@@ -1856,7 +1862,7 @@ void idMaterial::ParseMaterial( idLexer &src ) {
 		}
 		// nbohr1more: #4379 lightgem culling
 		else if ( !token.Icmp( "islightgemsurf" ) ) {
-			islightgemsurf = true;
+			isLightgemSurf = true;
 			continue;
 		}
 		// moster blood overlay forcing for alpha tested or translucent surfaces

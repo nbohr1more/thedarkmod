@@ -419,7 +419,7 @@ void idGLDrawableMaterial::draw(int x, int y, int w, int h) {
 			renderEntity_t worldEntity;
 
 			memset( &worldEntity, 0, sizeof( worldEntity ) );
-			if ( mat->HasGui() ) {
+			if ( mat->GlobalGui() ) {
 				worldEntity.gui[ 0 ] = mat->GlobalGui();
 			}
 			worldEntity.hModel = worldModel;
@@ -452,7 +452,7 @@ void idGLDrawableMaterial::draw(int x, int y, int w, int h) {
 
 		refdef.time = eventLoop->Milliseconds();
 
-		world->RenderScene( &refdef );
+		world->RenderScene( refdef );
 		int frontEnd, backEnd;
 		renderSystem->EndFrame( &frontEnd, &backEnd );
 
@@ -680,7 +680,7 @@ void idGLDrawableModel::draw(int x, int y, int w, int h) {
 
 	refdef.time = eventLoop->Milliseconds();
 
-	world->RenderScene( &refdef );
+	world->RenderScene( refdef );
 	int frontEnd, backEnd;
 	renderSystem->EndFrame( &frontEnd, &backEnd );
 

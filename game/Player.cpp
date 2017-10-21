@@ -3413,7 +3413,12 @@ void idPlayer::UpdateConditions( void )
 	AI_DEAD			= ( health <= 0 );
 	
 	// DarkMod: Catch the creep modifier
-	AI_CREEP		=( usercmd.buttons & BUTTON_5 ) && true;
+	if (cv_tdm_creep_toggle.GetBool()){
+	AI_CREEP = true;
+	}
+	else {
+	AI_CREEP		= ( usercmd.buttons & BUTTON_5 ) && true;
+	}
 }
 
 /*
@@ -5109,7 +5114,14 @@ void idPlayer::BobCycle( const idVec3 &pushVelocity ) {
 	} 
 	else if (physicsObj.GetWaterLevel() >= WATERLEVEL_HEAD || noclip)
 	{
-		// No viewbob when fully underwater or in noclip mode, start at beginning of cycle again
+	    // nbohr1more: #4625: stop flickering noclip animations
+		if (noclip)
+		{
+		  SetAnimState(ANIMCHANNEL_LEGS, "Legs_Idle", 4);
+		}
+		
+
+    	// No viewbob when fully underwater or in noclip mode, start at beginning of cycle again
 		bobCycle = 0;
 		bobFoot = 0;
 		bobfracsin = 0;
@@ -5137,7 +5149,7 @@ void idPlayer::BobCycle( const idVec3 &pushVelocity ) {
 		}
 
 		// greebo: is the player creeping? (Only kicks in when not running, run key cancels out creep key)
-		if (usercmd.buttons & BUTTON_5 && !(usercmd.buttons & BUTTON_RUN)) 
+		if ( (cv_tdm_creep_toggle.GetBool() || (usercmd.buttons & BUTTON_5)) && !(usercmd.buttons & BUTTON_RUN)) 
 		{
 			bobmove *= 0.5f * (1 - bobFrac);
 		}
@@ -6702,7 +6714,7 @@ void idPlayer::AdjustSpeed( void )
 			speed = pm_noclipspeed.GetFloat() * cv_pm_runmod.GetFloat();
 			bobFrac = 0.0f;
 		} 
-		else if (usercmd.buttons & BUTTON_5)
+		else if ((usercmd.buttons & BUTTON_5) || cv_tdm_creep_toggle.GetBool())
 		{
 			// slow "creep" noclip
 			speed = pm_noclipspeed.GetFloat() * cv_pm_creepmod.GetFloat();
@@ -6750,7 +6762,7 @@ void idPlayer::AdjustSpeed( void )
 		bobFrac = 0.0f;
 
 		// apply creep modifier; creep is on button_5
-		if( usercmd.buttons & BUTTON_5 )
+		if( (usercmd.buttons & BUTTON_5) || cv_tdm_creep_toggle.GetBool())
 		{
 			speed *= cv_pm_creepmod.GetFloat();
 		}
@@ -7217,7 +7229,13 @@ void idPlayer::UpdateHUD()
 
 	// Broadcast the HUD opacity value
 	m_overlays.setGlobalStateFloat("HUD_Opacity", cv_tdm_hud_opacity.GetFloat());
-
+	// Obsttorte
+	m_overlays.setGlobalStateFloat("iconSize", cv_gui_iconSize.GetFloat());
+	m_overlays.setGlobalStateFloat("smallTextSize", cv_gui_smallTextSize.GetFloat());
+	m_overlays.setGlobalStateFloat("bigTextSize", cv_gui_bigTextSize.GetFloat());
+	m_overlays.setGlobalStateFloat("lightgemSize", cv_gui_lightgemSize.GetFloat());
+	m_overlays.setGlobalStateFloat("barSize", cv_gui_barSize.GetFloat());
+	m_overlays.setGlobalStateFloat("objectiveTextSize", cv_gui_objectiveTextSize.GetFloat());
 	// Propagate the CVAR to the HUD
 	hud->SetStateBool("HUD_LightgemVisible", !cv_tdm_hud_hide_lightgem.GetBool());
 
